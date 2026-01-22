@@ -1,17 +1,18 @@
 {
   "jobId": "RUNNER-001",
   "title": "Background Worker + Job Queue System",
-  "phase": "PLAN",
+  "phase": "IMPLEMENT",
   "status": "ACTIVE",
   "elevated": true,
   "allowedPaths": [
     "jobs/RUNNER-001/",
     "ralph/enqueue.sh",
     "ralph/worker.sh",
+    "ralph/unlock-job.sh",
     "ralph/queue/"
   ],
   "created": "2026-01-22",
   "description": "Design and implement minimal, safe background worker for Ralph to run Desk jobs unattended",
-  "phase_last_completed": null,
-  "next_phase": "IMPLEMENT"
+  "phase_last_completed": "IMPLEMENT",
+  "next_phase": "VERIFY"
 }

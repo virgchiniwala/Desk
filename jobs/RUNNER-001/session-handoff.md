@@ -3,14 +3,15 @@
 ## Current Job State
 
 **Job ID:** RUNNER-001
-**Phase:** PLAN (completed)
-**Next Phase:** IMPLEMENT
+**Phase:** IMPLEMENT (completed)
+**Next Phase:** VERIFY
 **Status:** ACTIVE
 **Elevated:** Yes (ralph/ modifications allowed)
 
 ## What Was Completed
 
-### Queue System Design
+### PLAN Phase
+**Queue System Design**
 - ✅ Filesystem-backed queue under ralph/queue/
 - ✅ Queue file format: JSON with queueId, jobId, phase, execCommand, timeBudgetMinutes, retryCount, maxRetries, checkpointable
 - ✅ FIFO processing using timestamp-prefixed filenames
@@ -42,55 +43,104 @@
 - ✅ NEEDS_REVIEW: Requires human intervention, worker skips
 - ✅ BLOCKED: Waiting on dependency, worker skips
 
-### Safety Guarantees
+**Safety Guarantees**
 - ✅ All execution through ralph/run.sh (no bypass)
 - ✅ Worker refuses to run if run.sh unavailable
 - ✅ Worker refuses to run if timeout unavailable
-- ✅ Worker refuses to run if jq unavailable
-- ✅ Stale locks detected and removed
+- ✅ Stale locks detected and removed via TTL
+
+### IMPLEMENT Phase
+**Scripts Created**
+- ✅ ralph/enqueue.sh - Enqueue jobs with bash-only dependencies
+- ✅ ralph/worker.sh - Background worker with lock TTL
+- ✅ ralph/unlock-job.sh - Manual lock removal tool
+- ✅ ralph/queue/{pending,processing,completed,failed}/ - Queue directories
+
+**Key Implementation Details**
+- **Queue Format**: Bash-parseable KEY=VALUE (no jq dependency)
+- **Lock Strategy**: TTL-based (2 hours default) instead of PID checks
+- **Exit Codes**: 0=success, 1/2/3=failure→NEEDS_REVIEW, 124=timeout
+- **Logging**: Per-job logs at jobs/<JOB_ID>/tmp/worker.log
+- **Retry**: Configurable with --retries flag
+- **Checkpoint**: Re-enqueue on timeout with --checkpointable
+
+**Verification Complete**
+- ✅ All scripts pass bash -n syntax validation
+- ✅ Dry-run enqueue test successful
+- ✅ Queue file format verified (bash source-able)
 
 ## Immediate Next Action
 
-**Resume with:** RUNNER-001 IMPLEMENT phase
+**Resume with:** RUNNER-001 VERIFY phase
 
-**Implementation Tasks:**
-1. Create ralph/enqueue.sh
-   - Argument parsing with getopts or manual parsing
-   - Validation: job exists, phase valid, exec provided
-   - Queue file generation with all fields
-   - User feedback and error messages
+**Verification Tasks:**
+1. Test successful job execution
+   - Enqueue test job with simple command
+   - Start worker in tmux session
+   - Verify job completes and moves to completed/
+   - Check worker.log for correct logging
 
-2. Create ralph/worker.sh
-   - Preflight checks (run.sh, timeout, jq)
-   - Main loop (infinite with sleep 10)
-   - Queue scanning (oldest pending item)
-   - Lock acquisition with stale lock detection
-   - Execution with timeout wrapper
-   - Exit code handling (case statement)
-   - Lock release (trap for cleanup)
-   - Logging to job-specific files
+2. Test failure handling
+   - Enqueue job with failing command (exit 1)
+   - Verify job moves to failed/
+   - Verify meta.json marked NEEDS_REVIEW
 
-3. Create queue directory structure
-   - mkdir -p ralph/queue/{pending,processing,completed,failed}
+3. Test timeout behavior
+   - Enqueue job with long sleep (exceeds time budget)
+   - Test checkpointable: verify re-enqueue
+   - Test non-checkpointable: verify failed/ + NEEDS_REVIEW
 
-4. Test all scenarios from output/runner-design.md
-   - Example 1: Successful execution
-   - Example 2: Failure → NEEDS_REVIEW
-   - Example 3: Timeout with checkpoint
-   - Example 4: Concurrent lock prevention
-   - Example 5: Stale lock detection
+4. Test lock TTL
+   - Create artificial lock file with old timestamp
+   - Verify worker detects and removes stale lock
 
-5. Update progress.md and session-handoff.md
-6. Git commit IMPLEMENT checkpoint
+5. Test manual unlock
+   - Create lock manually
+   - Run unlock-job.sh
+   - Verify confirmation prompt and removal
+
+6. Update progress.md and session-handoff.md with test results
+7. Git commit VERIFY checkpoint
 
 ## Files to Read First (Next Session)
 
 **Priority order:**
-1. `jobs/RUNNER-001/plan.md` — Complete specification
-2. `jobs/RUNNER-001/output/runner-design.md` — Concrete examples
-3. `jobs/RUNNERFIX-001/output/runner-usage.md` — How to use ralph/run.sh
-4. `jobs/RUNNERFIX-001/output/limitations.md` — Known constraints
-5. `ralph/run.sh` — Current executor implementation
+1. `ralph/enqueue.sh` — Enqueue script implementation
+2. `ralph/worker.sh` — Worker loop implementation
+3. `ralph/unlock-job.sh` — Manual unlock tool
+4. `jobs/RUNNER-001/plan.md` — Original specification
+5. `jobs/RUNNER-001/output/runner-design.md` — Test scenarios
+
+## How to Use
+
+**Start Worker (tmux):**
+```bash
+cd /Users/virchiniwala/desk
+tmux new-session -s ralph-worker
+./ralph/worker.sh  # Runs forever, Ctrl+B D to detach
+```
+
+**Enqueue Jobs:**
+```bash
+./ralph/enqueue.sh JOB-ID PHASE --exec "CMD" [OPTIONS]
+
+# Options:
+#   --time-min N       Time budget in minutes (default: 30)
+#   --retries N        Max retries on failure (default: 0)
+#   --checkpointable   Re-enqueue on timeout (default: false)
+```
+
+**Monitor:**
+```bash
+tmux attach -t ralph-worker         # View worker stdout
+tail -f jobs/JOB-ID/tmp/worker.log # View job-specific log
+ls ralph/queue/*/                   # Check queue states
+```
+
+**Recover from Stuck Lock:**
+```bash
+./ralph/unlock-job.sh JOB-ID
+```
 
 ## Hard Stop Conditions
 
@@ -110,17 +160,23 @@
 
 ## Success Criteria
 
-**RUNNER-001 is complete when:**
+**RUNNER-001 IMPLEMENT Phase Complete:**
 - ✅ ralph/enqueue.sh can enqueue jobs with validation
-- ✅ ralph/worker.sh processes queue in FIFO order
-- ✅ Per-job locking prevents concurrent execution
-- ✅ Time budget enforced with timeout wrapper
-- ✅ Exit codes handled correctly (0=success, 1/2/3=failure, 124=timeout)
-- ✅ Failed jobs marked NEEDS_REVIEW in meta.json
-- ✅ Worker logs to jobs/<JOB_ID>/tmp/worker.log
-- ✅ Worker refuses to run if ralph/run.sh unavailable
-- ✅ Stale locks detected and removed
-- ✅ All 5 examples from runner-design.md verified
+- ✅ ralph/worker.sh implements background processing loop
+- ✅ ralph/unlock-job.sh provides manual lock recovery
+- ✅ Queue directories created and committed
+- ✅ All scripts pass bash -n validation
+- ✅ Dry-run test successful
+
+**RUNNER-001 VERIFY Phase (Next):**
+- ⏳ Worker processes queue in FIFO order
+- ⏳ Per-job locking prevents concurrent execution
+- ⏳ Time budget enforced with timeout wrapper
+- ⏳ Exit codes handled correctly (0=success, 1/2/3=failure, 124=timeout)
+- ⏳ Failed jobs marked NEEDS_REVIEW in meta.json
+- ⏳ Worker logs to jobs/<JOB_ID>/tmp/worker.log
+- ⏳ Worker refuses to run if ralph/run.sh unavailable
+- ⏳ Stale locks detected via TTL and removed
 
 ## Next Job Guidance
 

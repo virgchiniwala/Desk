@@ -1,6 +1,6 @@
 # RUNNER-001 Progress
 
-## Current Phase: PLAN
+## Current Phase: IMPLEMENT
 **Status:** DONE ✅
 
 ## Phase History
@@ -56,7 +56,76 @@
 
 ---
 
-## Next Phase: IMPLEMENT
+### IMPLEMENT — 2026-01-23
+**Status:** DONE ✅
+
+**Completed:**
+- ✅ Created `ralph/queue/` directory structure: `{pending,processing,completed,failed}/`
+- ✅ Created `ralph/enqueue.sh`:
+  - Bash-only queue format (KEY=VALUE, no jq dependency)
+  - Arguments: JOB-ID PHASE --exec "CMD" [--time-min N] [--retries N] [--checkpointable]
+  - Validates job ID format, phase, and job directory existence
+  - Generates timestamp-prefixed queue files for FIFO processing
+  - Warning for existing locks (non-blocking)
+- ✅ Created `ralph/worker.sh`:
+  - Lock TTL (2 hours default) instead of PID liveness checks
+  - Preflight checks: run.sh executable, timeout command available
+  - Main loop: scan queue → parse → validate → lock → execute → handle exit → release
+  - Exit code handling: 0=success, 1/2/3=failure, 124=timeout
+  - Per-job logging to jobs/<JOB_ID>/tmp/worker.log
+  - Retry logic: re-enqueue on failure if max_retries > 0
+  - Checkpoint logic: re-enqueue on timeout if checkpointable=true
+  - Always releases locks (even on failure)
+- ✅ Created `ralph/unlock-job.sh`:
+  - Manual lock removal with confirmation prompt
+  - Shows lock contents before removal
+  - Recovery tool for stuck workers
+- ✅ All scripts pass `bash -n` syntax validation
+- ✅ Dry-run test: successfully enqueued RUNNER-001 IMPLEMENT test item
+- ✅ Queue file format verified (bash-parseable KEY=VALUE)
+
+**Implementation Differences from Plan:**
+- **No jq dependency**: Queue files use bash-parseable KEY=VALUE format instead of JSON
+- **Lock TTL instead of PID checks**: Conservative 2-hour timeout with manual unlock script
+- **Simplified**: Removed complex PID liveness checks for MVP simplicity
+
+**How to Run in tmux:**
+
+**Terminal 1 (Worker):**
+```bash
+cd /Users/virchiniwala/desk
+tmux new-session -s ralph-worker
+./ralph/worker.sh
+# Worker runs in infinite loop
+# Ctrl+B, D to detach
+```
+
+**Terminal 2 (Enqueue Jobs):**
+```bash
+cd /Users/virchiniwala/desk
+./ralph/enqueue.sh JOB-ID PHASE --exec "COMMAND" [OPTIONS]
+
+# Example:
+./ralph/enqueue.sh MYWORK-001 IMPLEMENT \
+  --exec "echo 'done' > output/result.txt" \
+  --time-min 10 \
+  --checkpointable
+```
+
+**Monitor Worker:**
+```bash
+tmux attach -t ralph-worker  # Attach to worker session
+tail -f jobs/JOB-ID/tmp/worker.log  # Watch job-specific logs
+```
+
+**Manual Recovery:**
+```bash
+./ralph/unlock-job.sh JOB-ID  # Remove stuck lock
+```
+
+---
+
+## Next Phase: VERIFY
 
 **Planned Actions:**
 1. Create ralph/enqueue.sh script
