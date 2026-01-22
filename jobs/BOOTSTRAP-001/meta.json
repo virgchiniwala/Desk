@@ -1,0 +1,18 @@
+{
+  "jobId": "BOOTSTRAP-001",
+  "title": "Bootstrap Desk Repository Structure",
+  "phase": "PLAN",
+  "status": "DONE",
+  "elevated": true,
+  "allowedPaths": [
+    "jobs/",
+    "ralph/",
+    "vault/",
+    ".claude/contexts/",
+    "AGENTS.md",
+    "RALPH.md",
+    "vault/CLAUDE.md"
+  ],
+  "created": "2026-01-22",
+  "description": "Initialize repo with minimal Desk structure: job system, ralph scripts, vault docs, canonical docs"
+}
