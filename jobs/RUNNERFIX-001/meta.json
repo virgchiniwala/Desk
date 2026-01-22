@@ -1,0 +1,13 @@
+{
+  "jobId": "RUNNERFIX-001",
+  "title": "Fix ralph/run.sh for Unattended Execution",
+  "phase": "PLAN",
+  "status": "DONE",
+  "elevated": true,
+  "allowedPaths": [
+    "jobs/RUNNERFIX-001/",
+    "ralph/run.sh"
+  ],
+  "created": "2026-01-22",
+  "description": "Make ralph/run.sh support single-command unattended execution: preflight -> exec -> postflight -> commit"
+}
