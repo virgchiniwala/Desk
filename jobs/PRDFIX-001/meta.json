@@ -1,0 +1,14 @@
+{
+  "jobId": "PRDFIX-001",
+  "title": "Align PRD to repo kernel",
+  "phase": "EDIT",
+  "status": "DONE",
+  "elevated": true,
+  "allowedPaths": [
+    "jobs/PRDFIX-001/",
+    "tasks/prd-product-requirements-document-desk-platform-mvp.md"
+  ],
+  "created": "2026-01-23",
+  "updated": "2026-01-23",
+  "description": "Surgically edit PRD to align with actual Desk repo filesystem-based execution model"
+}
