@@ -1,0 +1,12 @@
+{
+  "jobId": "ENFORCE-002",
+  "title": "Untitled Job",
+  "phase": "PLAN",
+  "status": "PENDING",
+  "elevated": false,
+  "allowedPaths": [
+    "jobs/ENFORCE-002/"
+  ],
+  "created": "2026-01-22",
+  "description": ""
+}
