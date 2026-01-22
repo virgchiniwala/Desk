@@ -1,7 +1,7 @@
 {
   "jobId": "RUNNERFIX-001",
   "title": "Fix ralph/run.sh for Unattended Execution",
-  "phase": "IMPLEMENT",
+  "phase": "PACKAGE",
   "status": "DONE",
   "elevated": true,
   "allowedPaths": [
@@ -10,7 +10,8 @@
   ],
   "created": "2026-01-22",
   "description": "Make ralph/run.sh support single-command unattended execution: preflight -> exec -> postflight -> commit",
-  "phase_last_completed": "IMPLEMENT",
-  "next_phase": "PACKAGE",
-  "session_boundary": "2026-01-22T17:20:00+08:00"
+  "phase_last_completed": "PACKAGE",
+  "next_phase": null,
+  "session_boundary": "2026-01-22T17:20:00+08:00",
+  "completed": "2026-01-22"
 }

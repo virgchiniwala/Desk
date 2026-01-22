@@ -132,3 +132,53 @@
 
 **Resume instructions:**
 Next session should start with RUNNERFIX-001 PACKAGE phase to finalize and verify the ralph/run.sh changes.
+
+---
+
+## Phase: PACKAGE — 2026-01-22
+**Status:** DONE ✅
+
+**Completed:**
+- ✅ Created `output/runner-usage.md`:
+  - Canonical CLI usage documentation
+  - Explained --phase, --exec behavior, working directory semantics
+  - Documented automatic postflight and commit behavior
+  - Two complete examples: SAFE run (success) and VIOLATION run (blocked)
+  - Detailed exit codes, security model, validation guarantees
+- ✅ Created `output/verify-checklist.md`:
+  - Sub-2-minute human verification checklist
+  - Four test scenarios: job creation, SAFE run, VIOLATION run, working directory
+  - Exact commands with expected output
+  - Success criteria and troubleshooting
+- ✅ Created `output/limitations.md`:
+  - Technical dependencies (jq, git, bash 4.0+)
+  - Platform assumptions (macOS tested, Linux expected, Windows untested)
+  - Shell environment limitations (bash -lc, login shell)
+  - Git operation constraints (no conflict handling)
+  - Validation limitations (postflight timing, path traversal)
+  - Automation stop conditions (hard requirements for unattended use)
+  - Known safe vs unsafe patterns
+- ✅ Human verification completed: All tests passed
+  - SAFE run creates commit ✅
+  - VIOLATION run blocks commit (exit 2) ✅
+  - No unauthorized writes committed ✅
+  - Working directory correct ✅
+- ✅ Updated `progress.md` (this file)
+- ✅ Updated `session-handoff.md` with next job (RUNNER-001)
+- ✅ Updated `meta.json` (status: DONE, phase_last_completed: PACKAGE)
+
+**Artifacts Created:**
+- `output/runner-usage.md` — Canonical documentation (354 lines)
+- `output/verify-checklist.md` — Human verification guide (143 lines)
+- `output/limitations.md` — Known limitations and stop conditions (243 lines)
+
+**Key Deliverables:**
+- **Durable Documentation**: Complete CLI reference for ralph/run.sh
+- **Verification Protocol**: Sub-2-minute checklist for validating runner behavior
+- **Safety Boundaries**: Explicit stop conditions for automation
+- **Next Job Prerequisites**: RUNNER-001 cannot proceed without run.sh enforcement
+
+**Next Steps:**
+→ Job complete, ready for archival
+→ Next job: RUNNER-001 (background worker + queue)
+→ Hard prerequisite: Never run unattended without run.sh validation
