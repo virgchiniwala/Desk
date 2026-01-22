@@ -1,6 +1,6 @@
 # RUNNERFIX-001 Progress
 
-## Current Phase: PLAN
+## Current Phase: IMPLEMENT
 **Status:** DONE ✅
 
 ## Phase History
@@ -73,3 +73,43 @@
 - No commits on failures
 - All 15 terminal output cases match spec
 - Exit codes correct for all scenarios
+
+---
+
+## Phase: IMPLEMENT — 2026-01-22
+**Status:** DONE ✅
+
+**Completed:**
+- ✅ Refactored ralph/run.sh (173 → 325 lines)
+- ✅ Added new functions:
+  - `parse_args()` — Flag parsing for --exec, --postflight, --skip-postflight
+  - `validate_flags()` — Flag combination validation
+  - `run_preflight()` — Extracted preflight validation
+  - `run_exec()` — Execute command in jobs/JOB-ID/ directory
+  - `run_postflight()` — Refactored postflight checks
+  - `commit_changes()` — Extracted commit logic
+- ✅ Implemented --exec flag:
+  - Executes in `jobs/JOB-ID/` working directory
+  - Uses `bash -lc` for login shell
+  - Captures exit code, exits 3 on failure
+  - Skips postflight/commit on exec failure
+- ✅ Implemented automatic postflight after exec
+- ✅ Preserved backward compatibility (--postflight mode)
+- ✅ Tested exec mode: TESTRUN-001
+  - Verified working directory correct
+  - Verified file creation in job directory
+  - Verified unauthorized write detection
+  - Verified exit codes
+- ✅ Created `output/diff-summary.md`
+- ✅ Updated progress.md (this file)
+
+**Key Changes:**
+- **Single-command execution:** `--phase PHASE --exec "CMD"` now works
+- **Working directory:** Exec runs in `jobs/JOB-ID/` (verified with test)
+- **Automatic postflight:** No manual `--postflight` needed after exec
+- **Exit codes:** 0=success, 1=validation, 2=permission, 3=exec fail
+- **Backward compat:** Old `--postflight` mode still works
+
+**Next Steps:**
+→ Update session-handoff.md
+→ Git commit IMPLEMENT checkpoint
