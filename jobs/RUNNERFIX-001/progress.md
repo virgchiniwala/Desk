@@ -113,3 +113,22 @@
 **Next Steps:**
 → Update session-handoff.md
 → Git commit IMPLEMENT checkpoint
+
+---
+
+## Session Boundary — 2026-01-22 17:20 +0800
+
+**Reason:** Restarting Claude Code to activate Codex MCP server (claude-delegator)
+
+**Current state:**
+- Phase: IMPLEMENT (completed)
+- Status: DONE ✅
+- Next phase: PACKAGE
+
+**What was written:**
+- Updated `session-handoff.md` with session boundary context
+- Updated `progress.md` with this timestamp entry
+- Documented current repo state and next actions
+
+**Resume instructions:**
+Next session should start with RUNNERFIX-001 PACKAGE phase to finalize and verify the ralph/run.sh changes.
