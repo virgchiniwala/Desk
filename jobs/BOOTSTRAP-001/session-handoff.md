@@ -3,41 +3,48 @@
 ## Job Context
 **Job ID:** BOOTSTRAP-001
 **Title:** Bootstrap Desk Repository Structure
-**Current Phase:** PLAN
+**Current Phase:** IMPLEMENT
 **Status:** DONE ✅
 **Elevated:** Yes (repo-root writes allowed)
 
-## What Was Done (PLAN Phase)
+## What Was Done (IMPLEMENT Phase)
 
-Created complete job structure and detailed implementation plan:
+Executed bootstrap implementation per plan.md:
 
-1. **Job Directory:** `/jobs/BOOTSTRAP-001/` with subdirs
-2. **Artifacts Created:**
-   - `meta.json` — Job metadata with ELEVATED permissions
-   - `plan.md` — Detailed implementation spec
-   - `progress.md` — Phase tracking
+1. **Directories Created:**
+   - `/ralph` — Ralph workflow scripts
+   - `/vault` — Knowledge base documentation
+   - `/.claude/contexts` — Claude context files
+
+2. **Canonical Docs Copied (verbatim from ~/Downloads/desk_md/):**
+   - `AGENTS.md` → `/AGENTS.md` (2767 bytes)
+   - `RALPH.md` → `/RALPH.md` (5352 bytes)
+   - `vault:claude.md` → `/vault/CLAUDE.md` (5388 bytes)
+   - `DEV.md` → `/.claude/contexts/dev.md` (595 bytes)
+   - `RESEARCH.md` → `/.claude/contexts/research.md` (689 bytes)
+   - `REVIEW.md` → `/.claude/contexts/review.md` (667 bytes)
+
+3. **Ralph Scripts Created:**
+   - `/ralph/new-job.sh` — Job creation with validation
+     - Enforces: Job ID format (PROJECT-NNN), uniqueness, artifact generation
+   - `/ralph/run.sh` — Phase execution with enforcement
+     - Enforces: Phase validation, artifact checks, elevated permissions, write path restrictions, unauthorized write detection, git checkpoints
+   - Both scripts: executable, syntax validated with `bash -n`
+
+4. **Job Artifacts Updated:**
+   - `progress.md` — Phase: IMPLEMENT, Status: DONE
    - `session-handoff.md` — This file
 
-3. **Plan Specifics:**
-   - Exact directory paths to create
-   - Exact file paths and content requirements
-   - Script enforcement rules (new-job.sh, run.sh)
-   - Acceptance criteria for DONE/NEEDS_REVIEW/BLOCKED
+## What's Next (PACKAGE Phase)
 
-## What's Next (IMPLEMENT Phase)
+Finalize bootstrap job:
 
-Execute the plan in `plan.md`:
-
-1. Create directories: `/ralph`, `/vault`, `/.claude/contexts`
-2. Create files:
-   - `/AGENTS.md` (agent registry template)
-   - `/RALPH.md` (workflow documentation)
-   - `/vault/CLAUDE.md` (Desk invariants)
-   - `/ralph/new-job.sh` (job creation script)
-   - `/ralph/run.sh` (phase execution script)
-3. Set permissions: `chmod +x ralph/*.sh`
-4. Update `progress.md` and `session-handoff.md`
-5. Git commit: "Desk: BOOTSTRAP-001 — IMPLEMENT — checkpoint"
+1. Verify repo structure is complete and correct
+2. Test ralph scripts with dry runs
+3. Document any known limitations or future improvements
+4. Archive bootstrap artifacts
+5. Update final job status
+6. Git commit PACKAGE checkpoint
 
 ## Elevated Permissions
 
@@ -52,21 +59,32 @@ This job has ELEVATED status allowing writes to:
 
 **Restriction:** ONLY these paths. No other repo-root writes permitted.
 
-## Ambiguities / Decisions Needed
+## Assumptions Made
 
-None. Plan is complete and specific.
+1. **File Mapping:** Source file `vault:claude.md` (macOS colon-separated path) → `/vault/CLAUDE.md`
+2. **No Content Changes:** All canonical docs copied verbatim without modification
+3. **jq Dependency:** Scripts assume `jq` is available for JSON parsing
+4. **Git Config:** Using virchiniwala96@gmail.com for commits
+5. **Phase Names:** run.sh uses RESEARCH|PLAN|IMPLEMENT|REVIEW|VERIFY|PACKAGE (6 phases)
+
+## Decisions Needed
+
+None. Implementation complete per plan.
 
 ## How to Continue
 
-Run IMPLEMENT phase:
+Run PACKAGE phase:
 ```bash
-# Review plan
-cat jobs/BOOTSTRAP-001/plan.md
+# Review current state
+ls -R ralph/ vault/ .claude/
 
-# Execute IMPLEMENT (when ready)
-# Follow plan.md step-by-step
-# Update progress.md as you go
-# Commit when phase complete
+# Test ralph scripts (dry run)
+./ralph/new-job.sh TEST-001 "Test Job"
+cat jobs/TEST-001/meta.json
+
+# Execute PACKAGE (when ready)
+# Finalize and document
+# Commit checkpoint
 ```
 
 ## Desk Invariants Reminder
