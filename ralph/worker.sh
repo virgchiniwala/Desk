@@ -6,6 +6,7 @@ set -euo pipefail
 
 LOOP_SLEEP_SEC=10
 LOCK_TTL_HOURS=2
+TIMEOUT_BIN=""
 
 usage() {
     echo "Usage: $0 [OPTIONS]"
@@ -33,9 +34,15 @@ preflight_checks() {
     fi
     log_worker "✅ ralph/run.sh found"
 
-    # Check timeout command is available
-    if ! command -v timeout >/dev/null 2>&1; then
-        echo "❌ FATAL: timeout command not available"
+    # Determine timeout binary (prefer timeout, fallback to gtimeout)
+    if command -v timeout >/dev/null 2>&1; then
+        TIMEOUT_BIN="timeout"
+        log_worker "✅ timeout command available"
+    elif command -v gtimeout >/dev/null 2>&1; then
+        TIMEOUT_BIN="gtimeout"
+        log_worker "✅ gtimeout command available (macOS GNU coreutils)"
+    else
+        echo "❌ FATAL: Neither timeout nor gtimeout command available"
         echo "Worker requires timeout to enforce time budgets"
         echo ""
         echo "Install timeout:"
@@ -43,7 +50,6 @@ preflight_checks() {
         echo "  Linux: timeout is part of coreutils (usually pre-installed)"
         exit 1
     fi
-    log_worker "✅ timeout command available"
 
     # Ensure queue directories exist
     mkdir -p ralph/queue/{pending,processing,completed,failed}
@@ -146,7 +152,7 @@ execute_job() {
     log_worker "Executing $job_id — $phase (timeout: ${timeout_sec}s)"
 
     # Execute with timeout
-    if timeout "$timeout_sec" ./ralph/run.sh "$job_id" --phase "$phase" --exec "$exec_cmd" >> "$log_file" 2>&1; then
+    if ${TIMEOUT_BIN} "$timeout_sec" ./ralph/run.sh "$job_id" --phase "$phase" --exec "$exec_cmd" >> "$log_file" 2>&1; then
         EXIT_CODE=0
     else
         EXIT_CODE=$?

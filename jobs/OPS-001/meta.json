@@ -1,0 +1,13 @@
+{
+  "jobId": "OPS-001",
+  "title": "macOS Portability for ralph/worker.sh",
+  "phase": "IMPLEMENT",
+  "status": "ACTIVE",
+  "elevated": true,
+  "allowedPaths": [
+    "jobs/OPS-001/",
+    "ralph/worker.sh"
+  ],
+  "created": "2026-01-23",
+  "description": "Make ralph/worker.sh portable on macOS by supporting gtimeout"
+}
