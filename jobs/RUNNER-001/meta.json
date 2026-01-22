@@ -1,0 +1,17 @@
+{
+  "jobId": "RUNNER-001",
+  "title": "Background Worker + Job Queue System",
+  "phase": "PLAN",
+  "status": "ACTIVE",
+  "elevated": true,
+  "allowedPaths": [
+    "jobs/RUNNER-001/",
+    "ralph/enqueue.sh",
+    "ralph/worker.sh",
+    "ralph/queue/"
+  ],
+  "created": "2026-01-22",
+  "description": "Design and implement minimal, safe background worker for Ralph to run Desk jobs unattended",
+  "phase_last_completed": null,
+  "next_phase": "IMPLEMENT"
+}
