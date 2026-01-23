@@ -1,0 +1,14 @@
+{
+  "id": "9ae6be5f-0750-48ad-803b-4df0363c5220",
+  "status": "completed",
+  "startedAt": "2026-01-22T17:19:40.613Z",
+  "updatedAt": "2026-01-22T17:20:55.402Z",
+  "agentPlugin": "claude",
+  "trackerPlugin": "json",
+  "currentIteration": 0,
+  "maxIterations": 0,
+  "totalTasks": 0,
+  "tasksCompleted": 0,
+  "cwd": "/Users/virchiniwala/desk",
+  "endedAt": "2026-01-22T17:20:55.402Z"
+}

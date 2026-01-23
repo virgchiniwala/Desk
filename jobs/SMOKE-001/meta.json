@@ -1,0 +1,12 @@
+{
+  "jobId": "SMOKE-001",
+  "title": "Untitled Job",
+  "phase": "RESEARCH",
+  "status": "PENDING",
+  "elevated": false,
+  "allowedPaths": [
+    "jobs/SMOKE-001/"
+  ],
+  "created": "2026-01-23",
+  "description": ""
+}
