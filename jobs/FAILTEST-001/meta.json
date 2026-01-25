@@ -1,0 +1,12 @@
+{
+  "jobId": "FAILTEST-001",
+  "title": "Failure Test Job",
+  "phase": "PLAN",
+  "status": "NEEDS_REVIEW",
+  "elevated": false,
+  "allowedPaths": [
+    "jobs/FAILTEST-001/"
+  ],
+  "created": "2026-01-26",
+  "description": ""
+}

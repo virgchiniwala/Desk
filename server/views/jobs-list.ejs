@@ -1,0 +1,43 @@
+<%- include('layout', { title, body: `
+<div class="page-header">
+    <h1>Jobs</h1>
+    <div>
+        <a href="/jobs/new" class="btn-primary">Create New Job</a>
+        <button onclick="location.reload()" class="btn-secondary">Refresh</button>
+    </div>
+</div>
+
+${jobs.length === 0 ? `
+<div class="empty-state">
+    <p>No jobs found</p>
+    <p><a href="/jobs/new">Create your first job</a></p>
+</div>
+` : `
+<table class="jobs-table">
+    <thead>
+        <tr>
+            <th>Job ID</th>
+            <th>Title</th>
+            <th>Phase</th>
+            <th>Status</th>
+            <th>Created</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        ${jobs.map(job => `
+        <tr>
+            <td><code>${job.jobId}</code></td>
+            <td>${job.meta.title || '-'}</td>
+            <td>${job.meta.phase}</td>
+            <td><span class="status-${job.meta.status.toLowerCase()}">${job.meta.status}</span></td>
+            <td>${job.meta.created}</td>
+            <td>
+                <a href="/jobs/${job.jobId}" class="btn-link">View</a>
+            </td>
+        </tr>
+        `).join('')}
+    </tbody>
+</table>
+`}
+` }) %>
