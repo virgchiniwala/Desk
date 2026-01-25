@@ -172,7 +172,10 @@ execute_job() {
 
 mark_needs_review() {
     local job_id="$1"
+    local phase="$2"
+    local exit_code="$3"
     local meta_file="jobs/$job_id/meta.json"
+    local progress_file="jobs/$job_id/progress.md"
 
     # Only update if meta.json exists
     if [ ! -f "$meta_file" ]; then
@@ -180,8 +183,7 @@ mark_needs_review() {
         return
     fi
 
-    # Minimal safe update: read, modify status field, write back
-    # This uses a simple sed replacement to avoid jq dependency
+    # Update meta.json status
     if grep -q '"status"' "$meta_file"; then
         # Replace existing status field
         sed 's/"status": *"[^"]*"/"status": "NEEDS_REVIEW"/' "$meta_file" > "$meta_file.tmp"
@@ -189,6 +191,16 @@ mark_needs_review() {
         log_worker "✅ Marked $job_id as NEEDS_REVIEW"
     else
         log_worker "⚠️  WARNING: status field not found in meta.json, cannot mark NEEDS_REVIEW"
+    fi
+
+    # Append failure to progress.md
+    if [ -f "$progress_file" ]; then
+        echo "" >> "$progress_file"
+        echo "[$(date -u +"%Y-%m-%dT%H:%M:%S+00:00")] Phase $phase failed (exit code $exit_code)" >> "$progress_file"
+        echo "Status set to NEEDS_REVIEW" >> "$progress_file"
+        log_worker "✅ Appended failure to progress.md"
+    else
+        log_worker "⚠️  WARNING: progress.md not found for $job_id"
     fi
 }
 
@@ -231,7 +243,7 @@ handle_exit_code() {
             else
                 log_worker "TIMEOUT (non-checkpointable): $job_id (exit $exit_code)"
                 mv "$queue_file" "ralph/queue/failed/"
-                mark_needs_review "$job_id"
+                mark_needs_review "$job_id" "$PHASE" "$exit_code"
             fi
             ;;
 
@@ -260,7 +272,7 @@ handle_exit_code() {
                 log_worker "Re-enqueued as $new_queue_id"
             else
                 mv "$queue_file" "ralph/queue/failed/"
-                mark_needs_review "$job_id"
+                mark_needs_review "$job_id" "$PHASE" "$exit_code"
             fi
             ;;
 
@@ -268,7 +280,7 @@ handle_exit_code() {
             # Unknown error
             log_worker "UNKNOWN ERROR: $job_id (exit $exit_code)"
             mv "$queue_file" "ralph/queue/failed/"
-            mark_needs_review "$job_id"
+            mark_needs_review "$job_id" "$PHASE" "$exit_code"
             ;;
     esac
 }
