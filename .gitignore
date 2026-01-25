@@ -1,0 +1,4 @@
+.env
+server/node_modules/
+server/db/desk.db
+server/db/desk.db-*

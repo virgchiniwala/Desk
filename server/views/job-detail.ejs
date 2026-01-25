@@ -1,0 +1,91 @@
+<%- include('layout', { title, body: `
+<div class="page-header">
+    <h1>Job: ${jobId}</h1>
+    <div>
+        <a href="/" class="btn-secondary">Back to List</a>
+        <a href="/jobs/${jobId}/logs" class="btn-secondary">View Logs</a>
+        <button onclick="location.reload()" class="btn-secondary">Refresh</button>
+    </div>
+</div>
+
+<div class="job-detail">
+    <div class="job-meta">
+        <h2>Metadata</h2>
+        <dl>
+            <dt>Job ID:</dt>
+            <dd><code>${jobId}</code></dd>
+
+            <dt>Title:</dt>
+            <dd>${meta.title || '-'}</dd>
+
+            <dt>Phase:</dt>
+            <dd><strong>${meta.phase}</strong></dd>
+
+            <dt>Status:</dt>
+            <dd><span class="status-${meta.status.toLowerCase()}">${meta.status}</span></dd>
+
+            <dt>Created:</dt>
+            <dd>${meta.created}</dd>
+
+            <dt>Elevated:</dt>
+            <dd>${meta.elevated ? 'Yes' : 'No'}</dd>
+
+            <dt>Allowed Paths:</dt>
+            <dd>
+                <ul>
+                    ${meta.allowedPaths.map(p => `<li><code>${p}</code></li>`).join('')}
+                </ul>
+            </dd>
+        </dl>
+    </div>
+
+    <div class="job-actions">
+        <h2>Trigger Phase</h2>
+        <form method="POST" action="/jobs/${jobId}/start-phase" class="form">
+            <div class="form-group">
+                <label for="phase">Phase</label>
+                <select id="phase" name="phase" required>
+                    <option value="RESEARCH">RESEARCH</option>
+                    <option value="PLAN">PLAN</option>
+                    <option value="IMPLEMENT">IMPLEMENT</option>
+                    <option value="REVIEW">REVIEW</option>
+                    <option value="VERIFY">VERIFY</option>
+                    <option value="PACKAGE">PACKAGE</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="execCommand">Command</label>
+                <input type="text" id="execCommand" name="execCommand" required
+                       placeholder="echo 'test'" title="Simple command (avoid quotes/pipes)">
+                <small>Simple commands only (e.g., pwd, ls, echo test)</small>
+            </div>
+
+            <div class="form-group">
+                <label for="timeBudget">Time Budget (minutes)</label>
+                <input type="number" id="timeBudget" name="timeBudget" value="30" min="1" max="480">
+            </div>
+
+            <button type="submit" class="btn-primary">Enqueue Phase</button>
+        </form>
+    </div>
+
+    <div class="job-progress">
+        <h2>Progress</h2>
+        <pre>${progress || 'No progress recorded yet'}</pre>
+    </div>
+
+    ${outputFiles.length > 0 ? `
+    <div class="job-output">
+        <h2>Output Files</h2>
+        <ul class="file-list">
+            ${outputFiles.map(file => `
+            <li>
+                <a href="/artifacts/${jobId}/output/${file}" download>${file}</a>
+            </li>
+            `).join('')}
+        </ul>
+    </div>
+    ` : ''}
+</div>
+` }) %>
