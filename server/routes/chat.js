@@ -7,6 +7,11 @@ const { requireAuth } = require('../middleware/auth');
 const AIAgent = require('../lib/ai-agent');
 const workerManager = require('../lib/worker-manager');
 const db = require('../db/db');
+const {
+  isUserOverridesAllowed,
+  getUserModelConfig,
+  getInstanceDefaultInfo
+} = require('../lib/ai/provider-manager');
 
 const router = express.Router();
 const aiAgent = new AIAgent();
@@ -125,12 +130,20 @@ router.get('/:id', requireAuth, (req, res) => {
       WHERE cj.conversation_id = ?
     `).all(id);
 
+    // Get provider configuration for model selector
+    const overridesAllowed = isUserOverridesAllowed();
+    const userConfig = overridesAllowed ? getUserModelConfig(req.session.user.id) : null;
+    const defaultInfo = getInstanceDefaultInfo();
+
     res.render('chat', {
       title: conversation.title || 'Chat',
       conversation,
       messages,
       conversations,
-      jobs
+      jobs,
+      overridesAllowed,
+      userConfig,
+      defaultInfo
     });
   } catch (error) {
     console.error('Error loading conversation:', error);
@@ -278,6 +291,39 @@ router.get('/:id/stream', requireAuth, (req, res) => {
   // Heartbeat is handled by WorkerManager
 
   // Cleanup on disconnect happens in WorkerManager
+});
+
+// POST /chat/:id/model - Update conversation's model preference
+router.post('/:id/model', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { modelRef } = req.body;
+
+  try {
+    if (!isUserOverridesAllowed()) {
+      return res.status(403).json({ error: 'User model overrides not allowed' });
+    }
+
+    // Validate modelRef value
+    if (modelRef !== null && modelRef !== 'user') {
+      return res.status(400).json({ error: 'Invalid model_ref value' });
+    }
+
+    // Update conversation
+    const result = db.prepare(`
+      UPDATE conversations
+      SET model_ref = ?
+      WHERE id = ? AND user_id = ?
+    `).run(modelRef, id, req.session.user.id);
+
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating conversation model:', error);
+    res.status(500).json({ error: 'Failed to update model preference' });
+  }
 });
 
 // DELETE /chat/:id - Delete conversation
