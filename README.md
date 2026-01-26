@@ -272,9 +272,123 @@ SESSION_SECRET=generate-random-64-char-hex-string
 NODE_ENV=development  # or 'production'
 ```
 
+### AI Provider Configuration
+
+Desk supports multiple AI providers with flexible instance-level and user-level configuration.
+
+#### Instance Default Provider
+
+Set the default provider for your Desk instance in `.env`:
+
+```bash
+# Provider selection (anthropic | openai | ollama | claude-code | gemini)
+DESK_AI_PROVIDER=anthropic
+
+# Model selection (provider-specific)
+DESK_AI_MODEL=claude-sonnet-4-5-20250929
+
+# API keys for providers
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
+GOOGLE_API_KEY=AIza...
+```
+
+#### Supported Providers
+
+| Provider | Models | API Key Required | Local |
+|----------|--------|-----------------|-------|
+| **Anthropic** | Claude Sonnet 4.5, Claude Opus 4.5, etc. | Yes | No |
+| **OpenAI** | GPT-4, GPT-3.5, O1, etc. | Yes | No |
+| **Gemini** | Gemini Pro, Gemini 1.5 Pro/Flash | Yes | No |
+| **Ollama** | Llama, Mistral, Code Llama, etc. | No | Yes |
+| **Claude Code** | Via CLI | Anthropic account | No |
+
+#### Anthropic Setup
+```bash
+DESK_AI_PROVIDER=anthropic
+DESK_AI_MODEL=claude-sonnet-4-5-20250929
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+Get your API key: https://console.anthropic.com/
+
+#### OpenAI Setup
+```bash
+DESK_AI_PROVIDER=openai
+DESK_AI_MODEL=gpt-4-turbo
+OPENAI_API_KEY=sk-...
+OPENAI_BASE_URL=https://api.openai.com/v1  # Optional
+```
+
+Get your API key: https://platform.openai.com/api-keys
+
+**Azure OpenAI**: Set custom `OPENAI_BASE_URL`:
+```bash
+OPENAI_BASE_URL=https://your-resource.openai.azure.com/openai/deployments/your-deployment
+```
+
+#### Google Gemini Setup
+```bash
+DESK_AI_PROVIDER=gemini
+DESK_AI_MODEL=gemini-pro
+GOOGLE_API_KEY=AIza...
+```
+
+Get your API key: https://makersuite.google.com/app/apikey
+
+#### Ollama Setup (Local Models)
+```bash
+DESK_AI_PROVIDER=ollama
+DESK_AI_MODEL=llama2
+OLLAMA_BASE_URL=http://localhost:11434
+```
+
+Install Ollama: https://ollama.ai
+
+Then pull models:
+```bash
+ollama pull llama2
+ollama pull mistral
+ollama pull codellama
+```
+
+#### Claude Code CLI Setup
+```bash
+DESK_AI_PROVIDER=claude-code
+CLAUDE_CODE_PATH=claude
+CLAUDE_CODE_ARGS=--model sonnet  # Optional
+```
+
+Requires Claude Code CLI: https://claude.com/claude-code
+
+### User Model Overrides
+
+Allow users to configure their own AI providers:
+
+```bash
+# Enable user-level provider configuration
+DESK_ALLOW_USER_MODEL_OVERRIDES=true
+
+# Required: 64-character hex string for encrypting user API keys
+# Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+DESK_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000
+```
+
+When enabled:
+1. Users can visit `/settings/models` to configure their own provider
+2. API keys are encrypted at rest using `DESK_ENCRYPTION_KEY`
+3. Users can select between instance default or their custom provider in chat
+4. Each conversation remembers the provider selection
+
+**Security Notes:**
+- `DESK_ENCRYPTION_KEY` must be 32 bytes (64 hex characters)
+- Store encryption key securely (environment variable, secrets manager)
+- Changing encryption key invalidates all stored user API keys
+- If key is missing, user configurations cannot be saved
+
 ### Database
 - **SQLite** database at `server/db/desk.db`
-- **Schema**: Users + Sessions tables
+- **Schema**: Users + Sessions + User Model Configs tables
 - **Sessions**: Managed by connect-sqlite3
 - **Backups**: Copy `desk.db` file
 
