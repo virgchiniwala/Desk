@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title %> - Desk</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <style>
+    .settings-container {
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 40px;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+    .settings-header {
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .settings-header h1 {
+      margin: 0 0 10px;
+      font-size: 28px;
+      color: #333;
+    }
+
+    .settings-header p {
+      margin: 0;
+      color: #666;
+    }
+
+    .info-box {
+      padding: 15px;
+      margin-bottom: 20px;
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      border-radius: 4px;
+      color: #0369a1;
+      font-size: 14px;
+    }
+
+    .warning-box {
+      padding: 15px;
+      margin-bottom: 20px;
+      background: #fef3c7;
+      border: 1px solid #fcd34d;
+      border-radius: 4px;
+      color: #92400e;
+      font-size: 14px;
+    }
+
+    .error-box {
+      padding: 15px;
+      margin-bottom: 20px;
+      background: #fee;
+      border: 1px solid #fcc;
+      border-radius: 4px;
+      color: #c33;
+      font-size: 14px;
+    }
+
+    .form-section {
+      margin-bottom: 30px;
+    }
+
+    .form-section h2 {
+      font-size: 20px;
+      margin: 0 0 15px;
+      color: #333;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 500;
+      color: #333;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #6366f1;
+    }
+
+    .form-group .help-text {
+      font-size: 13px;
+      color: #666;
+      margin-top: 5px;
+    }
+
+    .form-actions {
+      display: flex;
+      gap: 10px;
+      padding-top: 20px;
+      border-top: 1px solid #e5e7eb;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: #6366f1;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #4f46e5;
+    }
+
+    .btn-secondary {
+      background: #f3f4f6;
+      color: #374151;
+      border: 1px solid #d1d5db;
+    }
+
+    .btn-secondary:hover {
+      background: #e5e7eb;
+    }
+
+    .btn-danger {
+      background: #ef4444;
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #dc2626;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .readonly-field {
+      padding: 10px;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 4px;
+      color: #6b7280;
+    }
+
+    #providerFields {
+      margin-top: 20px;
+    }
+
+    #testResult {
+      margin-top: 15px;
+      padding: 12px;
+      border-radius: 4px;
+      display: none;
+    }
+
+    #testResult.success {
+      background: #f0fdf4;
+      border: 1px solid #86efac;
+      color: #166534;
+      display: block;
+    }
+
+    #testResult.error {
+      background: #fef2f2;
+      border: 1px solid #fca5a5;
+      color: #991b1b;
+      display: block;
+    }
+
+    .back-link {
+      display: inline-block;
+      margin-bottom: 20px;
+      color: #6366f1;
+      text-decoration: none;
+    }
+
+    .back-link:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="settings-container">
+    <a href="/chat" class="back-link">← Back to Chat</a>
+
+    <div class="settings-header">
+      <h1>Model Settings</h1>
+      <p>Configure AI provider for conversations</p>
+    </div>
+
+    <% if (!encryptionAvailable) { %>
+      <div class="error-box">
+        ⚠️ <strong>Encryption not configured!</strong><br>
+        DESK_ENCRYPTION_KEY environment variable is missing. Cannot save API keys securely.
+      </div>
+    <% } %>
+
+    <!-- Instance Default -->
+    <div class="form-section">
+      <h2>Instance Default</h2>
+      <div class="info-box">
+        ℹ️ This is the default AI provider configured for this Desk instance.
+      </div>
+      <div class="form-group">
+        <label>Provider</label>
+        <div class="readonly-field"><%= defaultProvider %></div>
+      </div>
+      <div class="form-group">
+        <label>Model</label>
+        <div class="readonly-field"><%= defaultModel %></div>
+      </div>
+    </div>
+
+    <!-- User Override -->
+    <% if (overridesAllowed) { %>
+      <div class="form-section">
+        <h2>Your Custom Provider</h2>
+        <div class="info-box">
+          ℹ️ Configure your own AI provider. Secrets are encrypted at rest.
+        </div>
+
+        <% if (userConfig) { %>
+          <div class="info-box" style="background: #dcfce7; border-color: #86efac; color: #166534;">
+            ✓ You have configured: <strong><%= userConfig.provider %> / <%= userConfig.model %></strong>
+          </div>
+        <% } %>
+
+        <form id="providerForm">
+          <div class="form-group">
+            <label for="provider">Provider</label>
+            <select id="provider" name="provider" required>
+              <option value="">Select provider...</option>
+              <% providers.forEach(p => { %>
+                <option value="<%= p.id %>" <%= userConfig && userConfig.provider === p.id ? 'selected' : '' %>>
+                  <%= p.name %>
+                </option>
+              <% }) %>
+            </select>
+          </div>
+
+          <div id="providerFields"></div>
+
+          <div id="testResult"></div>
+
+          <div class="form-actions">
+            <button type="button" id="testBtn" class="btn btn-secondary" disabled>
+              Test Connection
+            </button>
+            <button type="submit" id="saveBtn" class="btn btn-primary" disabled>
+              Save Configuration
+            </button>
+            <% if (userConfig) { %>
+              <button type="button" id="deleteBtn" class="btn btn-danger">
+                Remove Configuration
+              </button>
+            <% } %>
+          </div>
+        </form>
+      </div>
+    <% } else { %>
+      <div class="warning-box">
+        ⚠️ User model overrides are disabled on this instance. Contact your administrator to enable per-user provider configuration.
+      </div>
+    <% } %>
+  </div>
+
+  <script>
+    // Provider metadata
+    const providers = <%- JSON.stringify(providers) %>;
+    const userConfig = <%- JSON.stringify(userConfig || null) %>;
+    const encryptionAvailable = <%= encryptionAvailable %>;
+
+    const providerSelect = document.getElementById('provider');
+    const providerFieldsDiv = document.getElementById('providerFields');
+    const testBtn = document.getElementById('testBtn');
+    const saveBtn = document.getElementById('saveBtn');
+    const deleteBtn = document.getElementById('deleteBtn');
+    const testResult = document.getElementById('testResult');
+    const form = document.getElementById('providerForm');
+
+    // Handle provider selection
+    providerSelect.addEventListener('change', () => {
+      const providerId = providerSelect.value;
+      renderProviderFields(providerId);
+    });
+
+    function renderProviderFields(providerId) {
+      // Clear existing fields safely
+      while (providerFieldsDiv.firstChild) {
+        providerFieldsDiv.removeChild(providerFieldsDiv.firstChild);
+      }
+
+      if (!providerId) {
+        testBtn.disabled = true;
+        saveBtn.disabled = true;
+        return;
+      }
+
+      const provider = providers.find(p => p.id === providerId);
+      if (!provider) return;
+
+      // Render fields using safe DOM methods
+      provider.fields.forEach(field => {
+        const div = document.createElement('div');
+        div.className = 'form-group';
+
+        const label = document.createElement('label');
+        label.textContent = field.label;
+        label.htmlFor = field.name;
+        div.appendChild(label);
+
+        let input;
+        if (field.type === 'select') {
+          input = document.createElement('select');
+          field.options.forEach(opt => {
+            const option = document.createElement('option');
+            option.value = opt.value;
+            option.textContent = opt.label;
+            if (field.defaultValue === opt.value) {
+              option.selected = true;
+            }
+            input.appendChild(option);
+          });
+        } else {
+          input = document.createElement('input');
+          input.type = field.type;
+          if (field.placeholder) {
+            input.placeholder = field.placeholder;
+          }
+          if (field.defaultValue) {
+            input.value = field.defaultValue;
+          }
+        }
+
+        input.id = field.name;
+        input.name = field.name;
+        input.required = field.required;
+        div.appendChild(input);
+
+        if (field.help) {
+          const help = document.createElement('div');
+          help.className = 'help-text';
+          help.textContent = field.help;
+          div.appendChild(help);
+        }
+
+        providerFieldsDiv.appendChild(div);
+      });
+
+      // Pre-fill with user config if exists
+      if (userConfig && userConfig.provider === providerId) {
+        provider.fields.forEach(field => {
+          const input = document.getElementById(field.name);
+          if (input && userConfig.config_json && userConfig.config_json[field.name]) {
+            input.value = userConfig.config_json[field.name];
+          }
+        });
+      }
+
+      testBtn.disabled = false;
+      saveBtn.disabled = false;
+    }
+
+    // Test connection
+    testBtn.addEventListener('click', async () => {
+      const providerId = providerSelect.value;
+      const provider = providers.find(p => p.id === providerId);
+      if (!provider) return;
+
+      // Collect config
+      const config = {};
+      provider.fields.forEach(field => {
+        const input = document.getElementById(field.name);
+        if (input) {
+          config[field.name] = input.value;
+        }
+      });
+
+      const modelField = provider.fields.find(f => f.name === 'model');
+      const model = config.model || modelField?.defaultValue;
+
+      // Show loading
+      testResult.textContent = 'Testing connection...';
+      testResult.className = '';
+      testResult.style.display = 'block';
+      testBtn.disabled = true;
+
+      try {
+        const response = await fetch('/settings/models/test', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            provider: providerId,
+            model,
+            config
+          })
+        });
+
+        const result = await response.json();
+
+        if (result.healthy) {
+          testResult.textContent = '✓ ' + result.message;
+          testResult.className = 'success';
+        } else {
+          testResult.textContent = '✗ ' + result.message;
+          testResult.className = 'error';
+        }
+      } catch (error) {
+        testResult.textContent = '✗ Error: ' + error.message;
+        testResult.className = 'error';
+      } finally {
+        testBtn.disabled = false;
+      }
+    });
+
+    // Save configuration
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      if (!encryptionAvailable) {
+        alert('Encryption not configured. Cannot save API keys.');
+        return;
+      }
+
+      const providerId = providerSelect.value;
+      const provider = providers.find(p => p.id === providerId);
+      if (!provider) return;
+
+      // Collect config
+      const config = {};
+      provider.fields.forEach(field => {
+        const input = document.getElementById(field.name);
+        if (input) {
+          config[field.name] = input.value;
+        }
+      });
+
+      const modelField = provider.fields.find(f => f.name === 'model');
+      const model = config.model || modelField?.defaultValue;
+
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving...';
+
+      try {
+        const response = await fetch('/settings/models', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            provider: providerId,
+            model,
+            config
+          })
+        });
+
+        if (response.ok) {
+          alert('Configuration saved successfully!');
+          window.location.reload();
+        } else {
+          const error = await response.json();
+          alert('Error: ' + error.error);
+        }
+      } catch (error) {
+        alert('Error: ' + error.message);
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Configuration';
+      }
+    });
+
+    // Delete configuration
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', async () => {
+        if (!confirm('Remove your custom provider configuration?')) {
+          return;
+        }
+
+        deleteBtn.disabled = true;
+
+        try {
+          const response = await fetch('/settings/models', {
+            method: 'DELETE'
+          });
+
+          if (response.ok) {
+            alert('Configuration removed');
+            window.location.reload();
+          } else {
+            alert('Error removing configuration');
+          }
+        } catch (error) {
+          alert('Error: ' + error.message);
+        } finally {
+          deleteBtn.disabled = false;
+        }
+      });
+    }
+
+    // Initialize with current provider if set
+    if (userConfig) {
+      renderProviderFields(userConfig.provider);
+    }
+  </script>
+</body>
+</html>

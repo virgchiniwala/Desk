@@ -59,6 +59,7 @@ app.use((req, res, next) => {
 // Routes (order matters: signup → auth → chat → API)
 const signupRoutes = require('./routes/signup');
 const authRoutes = require('./routes/auth');
+const settingsRoutes = require('./routes/settings');
 const chatRoutes = require('./routes/chat');
 const apiRoutes = require('./routes/api');
 const indexRoutes = require('./routes/index');
@@ -67,6 +68,7 @@ const artifactsRoutes = require('./routes/artifacts');
 
 app.use('/signup', signupRoutes); // First-time setup
 app.use('/', authRoutes);         // Login/logout
+app.use('/settings', settingsRoutes); // Settings (models, etc.)
 app.use('/chat', chatRoutes);     // Chat interface
 app.use('/api', apiRoutes);       // REST API
 app.use('/', indexRoutes);        // Legacy job list
