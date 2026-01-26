@@ -122,6 +122,30 @@ class TaskGraph {
   }
 
   /**
+   * Get next single ready task (oldest first)
+   * @returns {object|null} Task object or null if none ready
+   */
+  static getNextReadyTask() {
+    const query = `
+      SELECT t.*
+      FROM tasks t
+      WHERE t.status = 'READY'
+        AND (t.lease_expires_at IS NULL OR t.lease_expires_at < datetime('now'))
+        AND NOT EXISTS (
+          SELECT 1
+          FROM task_dependencies td
+          JOIN tasks blocked ON td.blocked_by_task_id = blocked.id
+          WHERE td.task_id = t.id
+            AND blocked.status != 'COMPLETED'
+        )
+      ORDER BY t.created_at ASC
+      LIMIT 1
+    `;
+
+    return db.prepare(query).get();
+  }
+
+  /**
    * Claim a task with lease (atomic operation)
    * @param {number} taskId - Task to claim
    * @param {number} leaseDurationMinutes - Lease duration (default 5)

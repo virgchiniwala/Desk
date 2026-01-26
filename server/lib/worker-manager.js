@@ -31,15 +31,15 @@ class WorkerManager extends EventEmitter {
       return;
     }
 
-    const workerPath = path.join(__dirname, '../../ralph/worker.sh');
+    const workerPath = path.join(__dirname, 'worker.js');
 
-    console.log('[WorkerManager] Starting Ralph worker:', workerPath);
+    console.log('[WorkerManager] Starting Node.js task worker:', workerPath);
 
-    this.workerProcess = spawn('bash', [workerPath], {
+    this.workerProcess = spawn('node', [workerPath], {
       cwd: path.join(__dirname, '../..'),
       env: {
         ...process.env,
-        DB_PATH: path.join(__dirname, '../db/desk.db')
+        NODE_ENV: process.env.NODE_ENV || 'development'
       },
       stdio: ['ignore', 'pipe', 'pipe']
     });
