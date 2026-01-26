@@ -78,7 +78,8 @@ function getInstanceDefaultProvider() {
       config.config_json.args = process.env.CLAUDE_CODE_ARGS.split(' ');
     }
   } else if (provider === 'gemini') {
-    config.secret = { apiKey: process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY };
+    // Support both GEMINI_API_KEY (official docs) and GOOGLE_API_KEY (legacy)
+    config.secret = { apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY };
   }
 
   return instantiateProvider(config);

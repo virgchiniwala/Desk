@@ -1,9 +1,9 @@
 /**
  * Google Gemini Provider
- * Uses Google Generative AI SDK for Gemini models
+ * Uses official @google/genai SDK for Gemini models
  */
 
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleGenAI } = require('@google/genai');
 const AIProvider = require('./base');
 
 class GeminiProvider extends AIProvider {
@@ -11,47 +11,52 @@ class GeminiProvider extends AIProvider {
     super(config);
 
     this.apiKey = config.apiKey;
-    this.model = config.model || 'gemini-pro';
+    this.model = config.model || 'gemini-2.0-flash-exp';
 
     if (!this.apiKey) {
       throw new Error('Gemini API key is required');
     }
 
-    this.client = new GoogleGenerativeAI(this.apiKey);
+    // Initialize client with API key
+    this.client = new GoogleGenAI({ apiKey: this.apiKey });
   }
 
   async generate(messages, options = {}) {
     const {
       tools = [],
       onChunk = null,
-      maxTokens = 4096,
+      maxTokens = 8192,
       temperature = 1.0,
       system = null
     } = options;
 
-    // Get generative model
-    const model = this.client.getGenerativeModel({ model: this.model });
-
     // Convert messages to Gemini format
-    const geminiMessages = this._convertMessages(messages, system);
+    const geminiContents = this._convertMessages(messages, system);
 
-    // Generate config
-    const generationConfig = {
-      temperature,
-      maxOutputTokens: maxTokens
+    // Build request
+    const request = {
+      model: this.model,
+      contents: geminiContents
     };
+
+    // Add generation config if needed
+    if (temperature !== 1.0 || maxTokens !== 8192) {
+      request.generationConfig = {
+        temperature,
+        maxOutputTokens: maxTokens
+      };
+    }
 
     try {
       if (onChunk && tools.length === 0) {
-        // Streaming mode (tools not supported in streaming yet)
-        const result = await model.generateContentStream(geminiMessages);
+        // Streaming mode
+        const response = await this.client.models.generateContentStream(request);
 
         let fullText = '';
-        for await (const chunk of result.stream) {
-          const chunkText = chunk.text();
-          if (chunkText) {
-            fullText += chunkText;
-            onChunk(chunkText);
+        for await (const chunk of response.stream) {
+          if (chunk.text) {
+            fullText += chunk.text;
+            onChunk(chunk.text);
           }
         }
 
@@ -62,11 +67,9 @@ class GeminiProvider extends AIProvider {
           provider: 'gemini'
         };
       } else {
-        // Non-streaming mode (supports function calling)
-        const result = await model.generateContent(geminiMessages);
-        const response = result.response;
-
-        const content = response.text();
+        // Non-streaming mode
+        const response = await this.client.models.generateContent(request);
+        const content = response.text || '';
 
         // If streaming callback provided, send result as one chunk
         if (onChunk && content) {
@@ -74,8 +77,6 @@ class GeminiProvider extends AIProvider {
         }
 
         // TODO: Add function calling support when tools are provided
-        // Gemini uses a different function calling format
-
         return {
           content,
           tool_calls: [],
@@ -90,17 +91,24 @@ class GeminiProvider extends AIProvider {
 
   /**
    * Convert messages to Gemini format
+   * New SDK uses: { role: "user", parts: [{ text: "..." }] }
    */
   _convertMessages(messages, system) {
-    const parts = [];
+    const contents = [];
 
     // Add system message as first user message if present
     if (system) {
-      parts.push({ text: `System: ${system}\n\n` });
+      contents.push({
+        role: 'user',
+        parts: [{ text: `System: ${system}\n\n` }]
+      });
     }
 
     // Convert messages
     for (const msg of messages) {
+      const role = msg.role === 'assistant' ? 'model' : 'user';
+      const parts = [];
+
       if (typeof msg.content === 'string') {
         parts.push({ text: msg.content });
       } else if (Array.isArray(msg.content)) {
@@ -112,20 +120,22 @@ class GeminiProvider extends AIProvider {
           // TODO: Handle other content types (images, tool_use, tool_result)
         }
       }
+
+      contents.push({ role, parts });
     }
 
-    return parts;
+    return contents;
   }
 
   async healthcheck() {
     try {
-      const model = this.client.getGenerativeModel({ model: this.model });
-
       // Simple test generation
-      const result = await model.generateContent('Hi');
-      const response = result.response;
+      const response = await this.client.models.generateContent({
+        model: this.model,
+        contents: 'Hi'
+      });
 
-      if (response.text()) {
+      if (response.text) {
         return {
           healthy: true,
           message: `Successfully connected to Gemini (${this.model})`
@@ -148,8 +158,8 @@ class GeminiProvider extends AIProvider {
     return {
       streaming: true,
       tools: false, // TODO: Implement function calling
-      vision: this.model.includes('vision'),
-      maxTokens: 30720 // Gemini Pro max tokens
+      vision: this.model.includes('vision') || this.model.includes('pro'),
+      maxTokens: 32768 // Gemini 2.0 max tokens
     };
   }
 
@@ -165,19 +175,18 @@ class GeminiProvider extends AIProvider {
         type: 'password',
         required: true,
         placeholder: 'AIza...',
-        help: 'Get your API key from Google AI Studio'
+        help: 'Get your API key from Google AI Studio (aistudio.google.com)'
       },
       {
         name: 'model',
         label: 'Model',
         type: 'select',
         required: false,
-        defaultValue: 'gemini-pro',
+        defaultValue: 'gemini-2.0-flash-exp',
         options: [
-          { value: 'gemini-pro', label: 'Gemini Pro' },
-          { value: 'gemini-pro-vision', label: 'Gemini Pro Vision' },
-          { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
-          { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' }
+          { value: 'gemini-2.0-flash-exp', label: 'Gemini 2.0 Flash (Experimental)' },
+          { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
+          { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' }
         ],
         help: 'Select Gemini model variant'
       }
