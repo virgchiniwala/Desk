@@ -1,14 +1,14 @@
-const Anthropic = require('@anthropic-ai/sdk');
 const db = require('../db/db');
 const TaskGraph = require('./task-graph');
 const { runRalphScript } = require('./shell-runner');
 const { listJobOutputFiles } = require('./job-reader');
 const SYSTEM_PROMPT = require('./ai-agent-prompt');
+const { getProviderForConversation } = require('./ai/provider-manager');
 
 /**
  * AI Agent for conversational task execution
  *
- * Integrates with Claude API to:
+ * Integrates with AI providers to:
  * - Interview users about their goals
  * - Generate task plans with dependencies
  * - Create and monitor Ralph jobs
@@ -16,11 +16,7 @@ const SYSTEM_PROMPT = require('./ai-agent-prompt');
  */
 class AIAgent {
   constructor() {
-    this.client = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY
-    });
-
-    this.model = 'claude-sonnet-4-5-20250929';
+    // Provider selection happens per-conversation in sendMessage()
   }
 
   /**
@@ -38,6 +34,18 @@ class AIAgent {
         VALUES (?, 'user', ?)
       `).run(conversationId, userMessage);
 
+      // Get conversation's user_id for provider selection
+      const conversation = db.prepare(`
+        SELECT user_id FROM conversations WHERE id = ?
+      `).get(conversationId);
+
+      if (!conversation) {
+        throw new Error('Conversation not found');
+      }
+
+      // Get provider for this conversation
+      const provider = getProviderForConversation(conversationId, conversation.user_id);
+
       // Get conversation history
       const history = this._getConversationHistory(conversationId);
 
@@ -53,44 +61,16 @@ class AIAgent {
         content: userMessage
       });
 
-      // Stream response
-      const stream = await this.client.messages.create({
-        model: this.model,
-        max_tokens: 4096,
+      // Stream response from provider
+      const response = await provider.generate(messages, {
         system: SYSTEM_PROMPT,
-        messages: messages,
         tools: this._getTools(),
-        stream: true
+        onChunk: onStream,
+        maxTokens: 4096
       });
 
-      let fullResponse = '';
-      let toolCalls = [];
-      let currentToolUse = null;
-
-      for await (const event of stream) {
-        if (event.type === 'content_block_start') {
-          if (event.content_block.type === 'tool_use') {
-            currentToolUse = {
-              id: event.content_block.id,
-              name: event.content_block.name,
-              input: ''
-            };
-          }
-        } else if (event.type === 'content_block_delta') {
-          if (event.delta.type === 'text_delta') {
-            fullResponse += event.delta.text;
-            onStream(event.delta.text);
-          } else if (event.delta.type === 'input_json_delta') {
-            currentToolUse.input += event.delta.partial_json;
-          }
-        } else if (event.type === 'content_block_stop') {
-          if (currentToolUse) {
-            currentToolUse.input = JSON.parse(currentToolUse.input);
-            toolCalls.push(currentToolUse);
-            currentToolUse = null;
-          }
-        }
-      }
+      const fullResponse = response.content || '';
+      const toolCalls = response.tool_calls || [];
 
       // Execute tool calls if any
       if (toolCalls.length > 0) {
@@ -130,21 +110,15 @@ class AIAgent {
           }))
         });
 
-        // Get follow-up response
-        const followUp = await this.client.messages.create({
-          model: this.model,
-          max_tokens: 4096,
+        // Get follow-up response from provider
+        const followUpResponse = await provider.generate(messages, {
           system: SYSTEM_PROMPT,
-          messages: messages,
-          tools: this._getTools()
+          tools: this._getTools(),
+          maxTokens: 4096,
+          onChunk: (chunk) => onStream('\n\n' + chunk)
         });
 
-        const followUpText = followUp.content
-          .filter(block => block.type === 'text')
-          .map(block => block.text)
-          .join('');
-
-        onStream('\n\n' + followUpText);
+        const followUpText = followUpResponse.content || '';
         fullResponse += '\n\n' + followUpText;
 
         // Save follow-up message

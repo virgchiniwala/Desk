@@ -6,14 +6,75 @@
   <title><%= title %> - Desk</title>
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="stylesheet" href="/css/chat.css">
+  <style>
+    .model-selector {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: 20px;
+      font-size: 14px;
+    }
+
+    .model-selector label {
+      color: #666;
+      font-weight: 500;
+    }
+
+    .model-selector select {
+      padding: 6px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      background: white;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .model-selector select:hover {
+      border-color: #6366f1;
+    }
+
+    .model-selector select:focus {
+      outline: none;
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
+
+    .settings-link {
+      display: inline-block;
+      margin-right: 15px;
+      font-size: 20px;
+      text-decoration: none;
+      opacity: 0.6;
+      transition: opacity 0.2s;
+    }
+
+    .settings-link:hover {
+      opacity: 1;
+    }
+  </style>
 </head>
 <body class="chat-layout">
   <!-- Header -->
   <div class="chat-header">
     <div class="header-left">
       <span class="logo">Desk AI</span>
+      <% if (overridesAllowed && userConfig) { %>
+        <div class="model-selector">
+          <label for="modelSelect">Model:</label>
+          <select id="modelSelect">
+            <option value="default" <%= !conversation.model_ref || conversation.model_ref === 'default' ? 'selected' : '' %>>
+              Default (<%= defaultInfo.provider %>/<%= defaultInfo.model.substring(0, 20) %>)
+            </option>
+            <option value="user" <%= conversation.model_ref === 'user' ? 'selected' : '' %>>
+              <%= userConfig.provider %>/<%= userConfig.model.substring(0, 20) %>
+            </option>
+          </select>
+        </div>
+      <% } %>
     </div>
     <div class="header-right">
+      <a href="/settings/models" class="settings-link" title="Model Settings">⚙️</a>
       <span class="user-name">@<%= session.user.username %></span>
       <form method="POST" action="/logout" style="display: inline;">
         <button type="submit" class="btn-logout">Logout</button>
@@ -143,6 +204,39 @@
     // Pass conversation ID to JavaScript
     window.CONVERSATION_ID = <%= conversation.id %>;
     window.JOBS = <%- JSON.stringify(jobs) %>;
+
+    // Handle model selection change
+    <% if (overridesAllowed && userConfig) { %>
+    const modelSelect = document.getElementById('modelSelect');
+    if (modelSelect) {
+      modelSelect.addEventListener('change', async () => {
+        const modelRef = modelSelect.value === 'user' ? 'user' : null;
+
+        try {
+          const response = await fetch(`/chat/${window.CONVERSATION_ID}/model`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ modelRef })
+          });
+
+          if (!response.ok) {
+            alert('Failed to update model preference');
+            return;
+          }
+
+          // Show brief success indication
+          const originalBg = modelSelect.style.background;
+          modelSelect.style.background = '#d4edda';
+          setTimeout(() => {
+            modelSelect.style.background = originalBg;
+          }, 500);
+        } catch (error) {
+          console.error('Error updating model:', error);
+          alert('Failed to update model preference');
+        }
+      });
+    }
+    <% } %>
   </script>
   <script src="/js/chat-client.js"></script>
 </body>

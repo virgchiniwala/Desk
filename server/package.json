@@ -17,6 +17,7 @@
   "license": "ISC",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
+    "@google/genai": "^0.3.0",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^9.2.2",
     "connect-sqlite3": "^0.9.13",
@@ -26,7 +27,11 @@
     "express-rate-limit": "^8.2.1",
     "express-session": "^1.17.3",
     "helmet": "^7.1.0",
-    "multer": "^2.0.2"
+    "multer": "^2.0.2",
+    "openai": "^4.73.0"
+  },
+  "overrides": {
+    "tar": "^7.5.4"
   },
   "engines": {
     "node": ">=18.0.0"
