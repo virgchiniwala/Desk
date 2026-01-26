@@ -1,0 +1,459 @@
+const Anthropic = require('@anthropic-ai/sdk');
+const db = require('../db/db');
+const TaskGraph = require('./task-graph');
+const { runRalphScript } = require('./shell-runner');
+const { listJobOutputFiles } = require('./job-reader');
+const SYSTEM_PROMPT = require('./ai-agent-prompt');
+
+/**
+ * AI Agent for conversational task execution
+ *
+ * Integrates with Claude API to:
+ * - Interview users about their goals
+ * - Generate task plans with dependencies
+ * - Create and monitor Ralph jobs
+ * - Deliver artifacts
+ */
+class AIAgent {
+  constructor() {
+    this.client = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY
+    });
+
+    this.model = 'claude-sonnet-4-5-20250929';
+  }
+
+  /**
+   * Send message to AI and get streaming response
+   * @param {number} conversationId - Conversation ID
+   * @param {string} userMessage - User's message
+   * @param {function} onStream - Callback for streaming chunks
+   * @param {function} onComplete - Callback when done
+   */
+  async sendMessage(conversationId, userMessage, onStream, onComplete) {
+    try {
+      // Save user message
+      db.prepare(`
+        INSERT INTO messages (conversation_id, role, content)
+        VALUES (?, 'user', ?)
+      `).run(conversationId, userMessage);
+
+      // Get conversation history
+      const history = this._getConversationHistory(conversationId);
+
+      // Build messages array
+      const messages = history.map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }));
+
+      // Add current user message
+      messages.push({
+        role: 'user',
+        content: userMessage
+      });
+
+      // Stream response
+      const stream = await this.client.messages.create({
+        model: this.model,
+        max_tokens: 4096,
+        system: SYSTEM_PROMPT,
+        messages: messages,
+        tools: this._getTools(),
+        stream: true
+      });
+
+      let fullResponse = '';
+      let toolCalls = [];
+      let currentToolUse = null;
+
+      for await (const event of stream) {
+        if (event.type === 'content_block_start') {
+          if (event.content_block.type === 'tool_use') {
+            currentToolUse = {
+              id: event.content_block.id,
+              name: event.content_block.name,
+              input: ''
+            };
+          }
+        } else if (event.type === 'content_block_delta') {
+          if (event.delta.type === 'text_delta') {
+            fullResponse += event.delta.text;
+            onStream(event.delta.text);
+          } else if (event.delta.type === 'input_json_delta') {
+            currentToolUse.input += event.delta.partial_json;
+          }
+        } else if (event.type === 'content_block_stop') {
+          if (currentToolUse) {
+            currentToolUse.input = JSON.parse(currentToolUse.input);
+            toolCalls.push(currentToolUse);
+            currentToolUse = null;
+          }
+        }
+      }
+
+      // Execute tool calls if any
+      if (toolCalls.length > 0) {
+        const toolResults = await this._executeTools(conversationId, toolCalls);
+
+        // Save assistant message with tool calls
+        db.prepare(`
+          INSERT INTO messages (conversation_id, role, content, tool_calls, tool_results)
+          VALUES (?, 'assistant', ?, ?, ?)
+        `).run(
+          conversationId,
+          fullResponse,
+          JSON.stringify(toolCalls),
+          JSON.stringify(toolResults)
+        );
+
+        // Continue conversation with tool results
+        messages.push({
+          role: 'assistant',
+          content: [
+            { type: 'text', text: fullResponse },
+            ...toolCalls.map(tc => ({
+              type: 'tool_use',
+              id: tc.id,
+              name: tc.name,
+              input: tc.input
+            }))
+          ]
+        });
+
+        messages.push({
+          role: 'user',
+          content: toolResults.map(tr => ({
+            type: 'tool_result',
+            tool_use_id: tr.tool_use_id,
+            content: JSON.stringify(tr.result)
+          }))
+        });
+
+        // Get follow-up response
+        const followUp = await this.client.messages.create({
+          model: this.model,
+          max_tokens: 4096,
+          system: SYSTEM_PROMPT,
+          messages: messages,
+          tools: this._getTools()
+        });
+
+        const followUpText = followUp.content
+          .filter(block => block.type === 'text')
+          .map(block => block.text)
+          .join('');
+
+        onStream('\n\n' + followUpText);
+        fullResponse += '\n\n' + followUpText;
+
+        // Save follow-up message
+        db.prepare(`
+          INSERT INTO messages (conversation_id, role, content)
+          VALUES (?, 'assistant', ?)
+        `).run(conversationId, followUpText);
+      } else {
+        // Save assistant message (no tools)
+        db.prepare(`
+          INSERT INTO messages (conversation_id, role, content)
+          VALUES (?, 'assistant', ?)
+        `).run(conversationId, fullResponse);
+      }
+
+      onComplete(fullResponse);
+    } catch (error) {
+      console.error('AI Agent error:', error);
+      const errorMsg = 'I encountered an error. Please try again.';
+      onStream(errorMsg);
+      onComplete(errorMsg);
+    }
+  }
+
+  /**
+   * Define tools available to the AI
+   */
+  _getTools() {
+    return [
+      {
+        name: 'create_job',
+        description: 'Create a new Ralph job directory. Only call after user approves your plan.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            jobId: {
+              type: 'string',
+              description: 'Job ID in format PROJECT-NNN (e.g., PROJECT-001)'
+            },
+            title: {
+              type: 'string',
+              description: 'Descriptive title for the job'
+            }
+          },
+          required: ['jobId', 'title']
+        }
+      },
+      {
+        name: 'create_task',
+        description: 'Create a task with explicit dependencies. Use this instead of enqueue_phase.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            jobId: {
+              type: 'string',
+              description: 'Job ID'
+            },
+            taskName: {
+              type: 'string',
+              description: 'Unique task identifier (e.g., "fetch_data", "analyze_results")'
+            },
+            description: {
+              type: 'string',
+              description: 'What this task does'
+            },
+            command: {
+              type: 'string',
+              description: 'Bash command to execute'
+            },
+            timeBudget: {
+              type: 'number',
+              description: 'Time budget in minutes (default 30)'
+            },
+            blockedBy: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Array of task names that must complete first (empty array for no dependencies)'
+            }
+          },
+          required: ['jobId', 'taskName', 'command']
+        }
+      },
+      {
+        name: 'check_job_status',
+        description: 'Check status of a job and its tasks',
+        input_schema: {
+          type: 'object',
+          properties: {
+            jobId: {
+              type: 'string',
+              description: 'Job ID to check'
+            }
+          },
+          required: ['jobId']
+        }
+      },
+      {
+        name: 'list_artifacts',
+        description: 'List output files produced by a job',
+        input_schema: {
+          type: 'object',
+          properties: {
+            jobId: {
+              type: 'string',
+              description: 'Job ID'
+            }
+          },
+          required: ['jobId']
+        }
+      }
+    ];
+  }
+
+  /**
+   * Execute tool calls
+   */
+  async _executeTools(conversationId, toolCalls) {
+    const results = [];
+
+    for (const toolCall of toolCalls) {
+      try {
+        let result;
+
+        switch (toolCall.name) {
+          case 'create_job':
+            result = await this._createJob(conversationId, toolCall.input);
+            break;
+
+          case 'create_task':
+            result = await this._createTask(toolCall.input);
+            break;
+
+          case 'check_job_status':
+            result = await this._checkJobStatus(toolCall.input);
+            break;
+
+          case 'list_artifacts':
+            result = await this._listArtifacts(toolCall.input);
+            break;
+
+          default:
+            result = { error: `Unknown tool: ${toolCall.name}` };
+        }
+
+        results.push({
+          tool_use_id: toolCall.id,
+          result: result
+        });
+      } catch (error) {
+        results.push({
+          tool_use_id: toolCall.id,
+          result: { error: error.message }
+        });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Create job tool implementation
+   */
+  async _createJob(conversationId, input) {
+    const { jobId, title } = input;
+
+    // Validate job ID format
+    if (!/^[A-Z]+-[0-9]{3}$/.test(jobId)) {
+      throw new Error('Invalid job ID format. Must be PROJECT-NNN (uppercase, 3 digits)');
+    }
+
+    // Run new-job.sh script
+    const result = await runRalphScript('new-job.sh', [jobId, title]);
+
+    if (result.exitCode !== 0) {
+      throw new Error(result.stderr || 'Failed to create job');
+    }
+
+    // Link job to conversation
+    db.prepare(`
+      INSERT INTO conversation_jobs (conversation_id, job_id)
+      VALUES (?, ?)
+    `).run(conversationId, jobId);
+
+    return {
+      success: true,
+      jobId,
+      message: `Job ${jobId} created successfully`
+    };
+  }
+
+  /**
+   * Create task tool implementation
+   */
+  async _createTask(input) {
+    const { jobId, taskName, description, command, timeBudget, blockedBy } = input;
+
+    // Validate command for security
+    this._validateCommand(command);
+
+    // Create task with dependencies
+    const taskId = TaskGraph.createTask(jobId, taskName, command, {
+      description,
+      timeBudget: timeBudget || 30,
+      blockedBy: blockedBy || []
+    });
+
+    return {
+      success: true,
+      taskId,
+      taskName,
+      message: `Task "${taskName}" created with ${blockedBy?.length || 0} dependencies`
+    };
+  }
+
+  /**
+   * Check job status tool implementation
+   */
+  async _checkJobStatus(input) {
+    const { jobId } = input;
+
+    // Get task dependency graph
+    const graph = TaskGraph.getDependencyGraph(jobId);
+
+    return {
+      jobId,
+      tasks: graph.tasks.map(task => ({
+        taskName: task.task_name,
+        status: task.status,
+        description: task.description,
+        attemptCount: task.attempt_count,
+        startedAt: task.started_at,
+        completedAt: task.completed_at,
+        blockedBy: graph.dependencies
+          .filter(d => d.task_id === task.id)
+          .map(d => d.blocked_by_name)
+      }))
+    };
+  }
+
+  /**
+   * List artifacts tool implementation
+   */
+  async _listArtifacts(input) {
+    const { jobId } = input;
+
+    try {
+      const files = listJobOutputFiles(jobId);
+
+      return {
+        jobId,
+        artifacts: files.map(file => ({
+          filename: file.name,
+          path: `/artifacts/${jobId}/${file.name}`,
+          size: file.size
+        }))
+      };
+    } catch (error) {
+      return {
+        jobId,
+        artifacts: [],
+        message: 'No artifacts yet'
+      };
+    }
+  }
+
+  /**
+   * Validate command for security
+   */
+  _validateCommand(command) {
+    const blockedPatterns = [
+      /rm\s+-rf\s+\//,           // rm -rf /
+      />\s*\/dev\/sd[a-z]/,      // write to disk devices
+      /curl.*\|\s*bash/,         // pipe to bash
+      /wget.*\|\s*sh/,           // pipe to shell
+      /\$\(.*\)/,                // command substitution
+      /`.*`/,                    // backticks
+      /&&.*rm/,                  // chained destructive
+      /;\s*rm/,                  // semicolon destructive
+      /\/etc\//,                 // access /etc
+      /\/var\//,                 // access /var
+      /~\/\.ssh/,                // access SSH keys
+      /~\/\.aws/,                // access AWS credentials
+      /\.env/                    // access .env files
+    ];
+
+    for (const pattern of blockedPatterns) {
+      if (pattern.test(command)) {
+        throw new Error('Command contains blocked pattern for security');
+      }
+    }
+
+    // Ensure command writes to job directory
+    if (!command.includes('jobs/')) {
+      console.warn('Command does not reference jobs directory:', command);
+    }
+  }
+
+  /**
+   * Get conversation history
+   */
+  _getConversationHistory(conversationId, limit = 50) {
+    return db.prepare(`
+      SELECT role, content, tool_calls, tool_results, created_at
+      FROM messages
+      WHERE conversation_id = ?
+      ORDER BY created_at DESC
+      LIMIT ?
+    `).all(conversationId, limit).reverse();
+  }
+}
+
+module.exports = AIAgent;
