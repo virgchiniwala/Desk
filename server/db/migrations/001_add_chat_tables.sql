@@ -1,5 +1,6 @@
 -- Migration 001: Add chat tables for AI conversation interface
--- Adds support for multi-turn conversations with file attachments and job tracking
+-- Adds support for multi-turn conversations with file attachments, job tracking,
+-- task dependency graphs, lease-based worker ownership, and append-only event logs
 
 -- Conversations: Top-level chat sessions
 CREATE TABLE IF NOT EXISTS conversations (
@@ -59,3 +60,79 @@ CREATE TABLE IF NOT EXISTS conversation_jobs (
 
 CREATE INDEX IF NOT EXISTS idx_conversation_jobs_conversation_id ON conversation_jobs(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_conversation_jobs_job_id ON conversation_jobs(job_id);
+
+-- Tasks: Task dependency graph (replaces flat phase-based execution)
+CREATE TABLE IF NOT EXISTS tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id TEXT NOT NULL,
+    task_name TEXT NOT NULL,
+    description TEXT,
+    command TEXT NOT NULL,
+    time_budget INTEGER DEFAULT 30,
+    status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING', 'READY', 'IN_PROGRESS', 'COMPLETED', 'FAILED')),
+
+    -- Lease-based ownership (not PID-based)
+    lease_expires_at TEXT, -- ISO timestamp when lease expires
+    last_heartbeat TEXT,   -- Worker extends this periodically
+
+    -- Retry policy and tracking
+    attempt_count INTEGER DEFAULT 0,
+    max_attempts INTEGER DEFAULT 3,
+    last_error TEXT,
+
+    -- Timing
+    started_at TEXT,
+    completed_at TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+
+    UNIQUE(job_id, task_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_tasks_job_id ON tasks(job_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+CREATE INDEX IF NOT EXISTS idx_tasks_lease_expires ON tasks(lease_expires_at);
+
+-- Task Dependencies: Directed Acyclic Graph (DAG)
+CREATE TABLE IF NOT EXISTS task_dependencies (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id INTEGER NOT NULL,
+    blocked_by_task_id INTEGER NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+    FOREIGN KEY (blocked_by_task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+    UNIQUE(task_id, blocked_by_task_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_task_dependencies_task_id ON task_dependencies(task_id);
+CREATE INDEX IF NOT EXISTS idx_task_dependencies_blocked_by ON task_dependencies(blocked_by_task_id);
+
+-- Task Artifacts: Outputs produced by tasks
+CREATE TABLE IF NOT EXISTS task_artifacts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id INTEGER NOT NULL,
+    filepath TEXT NOT NULL,
+    artifact_type TEXT DEFAULT 'output' CHECK(artifact_type IN ('output', 'log', 'metadata')),
+    file_size INTEGER,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_task_artifacts_task_id ON task_artifacts(task_id);
+
+-- Task Events: Append-only audit log (NEVER DELETE/UPDATE)
+CREATE TABLE IF NOT EXISTS task_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id INTEGER NOT NULL,
+    event_type TEXT NOT NULL CHECK(event_type IN (
+        'TaskCreated', 'TaskStateChanged', 'TaskLeased', 'TaskHeartbeat',
+        'TaskFailed', 'TaskRetried', 'TaskCompleted',
+        'ToolCalled', 'ApprovalGranted', 'DependencyCreated', 'DependencySatisfied'
+    )),
+    event_data TEXT, -- JSON blob with event details
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_task_events_task_id ON task_events(task_id);
+CREATE INDEX IF NOT EXISTS idx_task_events_type ON task_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_task_events_created_at ON task_events(created_at DESC);

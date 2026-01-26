@@ -101,18 +101,39 @@ Users describe goals conversationally, AI interviews them, generates task plans,
 
 **tasks**
 - Replaces flat phases (RESEARCH/PLAN/etc)
-- Fields: id, job_id, task_name, description, command, time_budget, status (PENDING/READY/IN_PROGRESS/COMPLETED/FAILED), owner_worker, started_at, completed_at
+- Fields:
+  - id, job_id, task_name, description, command, time_budget
+  - status (PENDING/READY/IN_PROGRESS/COMPLETED/FAILED)
+  - lease_expires_at (timestamp for worker lease)
+  - last_heartbeat (worker extends this)
+  - attempt_count (retry tracking)
+  - max_attempts (policy: default 3)
+  - last_error (failure details)
+  - started_at, completed_at
 - Status transitions: PENDING → READY (when dependencies satisfied) → IN_PROGRESS → COMPLETED/FAILED
+- **Lease-based ownership** (not PID): Worker claims with lease_expires_at, heartbeats to extend, auto-recovery on expiry
+- **Idempotent execution**: Safe to retry, tracks attempts and errors
 
 **task_dependencies**
 - Directed acyclic graph (DAG)
 - Fields: task_id, blocked_by_task_id
 - Enforces execution order
-- Prevents cycles (deadlock detection)
+- **Cycle detection required**: AI/users can create dependencies, must validate DAG on insert (no cycles = no deadlock)
+- Algorithm: depth-first search with recursion stack detection
 
 **task_artifacts**
 - Outputs produced by tasks
 - Fields: task_id, filepath, artifact_type (output/log/metadata)
+
+**task_events** (NEW - Append-Only Audit Log)
+- Immutable event log for debugging and audit trail
+- Fields: id, task_id, event_type, event_data (JSON), created_at
+- Event types:
+  - TaskCreated, TaskStateChanged, TaskLeased, TaskHeartbeat
+  - TaskFailed, TaskRetried, TaskCompleted
+  - ToolCalled, ApprovalGranted, DependencySatisfied
+- **Never mutate**: Only INSERT, provides complete history
+- Enables: replay, debugging, audit compliance, state reconstruction
 
 ---
 
@@ -362,6 +383,68 @@ fetch → ──┤                       ├→ analyze → report
           └→ transform_data ──────┘
 ```
 
+### Cycle Detection (Critical for AI-Generated Dependencies)
+
+**Problem:** LLM or users can create circular dependencies → deadlock
+
+**Solution:** Validate DAG on every dependency insert
+
+```javascript
+// TaskGraph.js - Cycle detection algorithm
+class TaskGraph {
+  static detectCycle(taskId, dependencies) {
+    // Build adjacency list from existing + new dependencies
+    const graph = this.buildGraph(taskId, dependencies);
+
+    const visited = new Set();
+    const recursionStack = new Set();
+
+    function hasCycle(node) {
+      if (recursionStack.has(node)) return true;  // Cycle found!
+      if (visited.has(node)) return false;
+
+      visited.add(node);
+      recursionStack.add(node);
+
+      for (const neighbor of graph[node] || []) {
+        if (hasCycle(neighbor)) return true;
+      }
+
+      recursionStack.delete(node);
+      return false;
+    }
+
+    return hasCycle(taskId);
+  }
+
+  static createTaskWithDependencies(taskName, blockedBy) {
+    // Before inserting, check for cycles
+    if (this.detectCycle(taskName, blockedBy)) {
+      throw new Error(`Cannot create task "${taskName}": would create dependency cycle`);
+    }
+
+    // Safe to insert
+    db.prepare('INSERT INTO tasks (task_name, ...) VALUES (?, ...)').run(taskName, ...);
+
+    for (const dep of blockedBy) {
+      db.prepare('INSERT INTO task_dependencies (task_id, blocked_by_task_id) VALUES (?, ?)')
+        .run(taskId, depId);
+    }
+
+    // Log the dependency creation
+    db.prepare('INSERT INTO task_events (task_id, event_type, event_data) VALUES (?, ?, ?)')
+      .run(taskId, 'DependencyCreated', JSON.stringify({ blockedBy }));
+  }
+}
+```
+
+**Example Cycle Prevention:**
+```
+Task A depends on B
+Task B depends on C
+Task C depends on A  ← REJECTED (cycle detected)
+```
+
 ---
 
 ## Worker Integration
@@ -402,18 +485,117 @@ get_next_phase() {
   # Sequential RESEARCH → PLAN → IMPLEMENT ...
 }
 
-# New: Pick next READY task
+# New: Pick next READY task with lease expiry check
 get_next_ready_task() {
-  # Query for tasks where:
-  # - status = 'READY'
-  # - owner_worker IS NULL
-  # - All dependencies satisfied
+  sqlite3 "${DB_PATH}" <<SQL
+    SELECT id, task_name, command, time_budget
+    FROM tasks
+    WHERE status = 'READY'
+      AND (lease_expires_at IS NULL OR lease_expires_at < datetime('now'))
+      AND NOT EXISTS (
+        SELECT 1 FROM task_dependencies td
+        JOIN tasks blocked ON td.blocked_by_task_id = blocked.id
+        WHERE td.task_id = tasks.id
+          AND blocked.status != 'COMPLETED'
+      )
+    ORDER BY created_at ASC
+    LIMIT 1;
+SQL
 }
 
-# Enforce: only READY tasks execute
+# Lease-based claim (not PID-based ownership)
 claim_task() {
-  # Atomic: update status to IN_PROGRESS
-  # Set owner_worker to $$
+  local task_id="$1"
+  local lease_duration_minutes=5  # 5-minute lease
+
+  sqlite3 "${DB_PATH}" <<SQL
+    UPDATE tasks
+    SET status = 'IN_PROGRESS',
+        lease_expires_at = datetime('now', '+${lease_duration_minutes} minutes'),
+        last_heartbeat = datetime('now'),
+        attempt_count = attempt_count + 1,
+        started_at = CASE WHEN started_at IS NULL THEN datetime('now') ELSE started_at END
+    WHERE id = ${task_id}
+      AND status = 'READY'
+      AND (lease_expires_at IS NULL OR lease_expires_at < datetime('now'));
+
+    INSERT INTO task_events (task_id, event_type, event_data)
+    VALUES (${task_id}, 'TaskLeased', json_object('worker_pid', $$));
+SQL
+}
+
+# Worker heartbeat loop (extends lease while working)
+heartbeat_task() {
+  local task_id="$1"
+
+  while true; do
+    sleep 30  # Heartbeat every 30 seconds
+
+    sqlite3 "${DB_PATH}" <<SQL
+      UPDATE tasks
+      SET lease_expires_at = datetime('now', '+5 minutes'),
+          last_heartbeat = datetime('now')
+      WHERE id = ${task_id}
+        AND status = 'IN_PROGRESS';
+
+      INSERT INTO task_events (task_id, event_type, event_data)
+      VALUES (${task_id}, 'TaskHeartbeat', json_object('timestamp', datetime('now')));
+SQL
+  done &
+
+  HEARTBEAT_PID=$!
+}
+
+# Idempotent task completion
+complete_task() {
+  local task_id="$1"
+  local exit_code="$2"
+
+  kill $HEARTBEAT_PID 2>/dev/null  # Stop heartbeat
+
+  if [ "$exit_code" -eq 0 ]; then
+    sqlite3 "${DB_PATH}" <<SQL
+      UPDATE tasks
+      SET status = 'COMPLETED',
+          lease_expires_at = NULL,
+          completed_at = datetime('now')
+      WHERE id = ${task_id};
+
+      INSERT INTO task_events (task_id, event_type, event_data)
+      VALUES (${task_id}, 'TaskCompleted', json_object('exit_code', ${exit_code}));
+SQL
+  else
+    # Retry logic with exponential backoff
+    local attempts=$(sqlite3 "${DB_PATH}" "SELECT attempt_count FROM tasks WHERE id = ${task_id}")
+    local max_attempts=$(sqlite3 "${DB_PATH}" "SELECT max_attempts FROM tasks WHERE id = ${task_id}")
+
+    if [ "$attempts" -lt "$max_attempts" ]; then
+      # Reset to READY for retry
+      sqlite3 "${DB_PATH}" <<SQL
+        UPDATE tasks
+        SET status = 'READY',
+            lease_expires_at = NULL,
+            last_error = '${error_msg}'
+        WHERE id = ${task_id};
+
+        INSERT INTO task_events (task_id, event_type, event_data)
+        VALUES (${task_id}, 'TaskRetried', json_object('attempt', ${attempts}, 'error', '${error_msg}'));
+SQL
+    else
+      # Max attempts reached, mark as FAILED
+      sqlite3 "${DB_PATH}" <<SQL
+        UPDATE tasks
+        SET status = 'FAILED',
+            lease_expires_at = NULL,
+            last_error = '${error_msg}',
+            completed_at = datetime('now')
+        WHERE id = ${task_id};
+
+        INSERT INTO task_events (task_id, event_type, event_data)
+        VALUES (${task_id}, 'TaskFailed', json_object('attempts', ${attempts}, 'error', '${error_msg}'));
+SQL
+    fi
+  fi
 }
 ```
 
@@ -606,6 +788,54 @@ POST /logout                        → Destroy session
 - Vanilla JavaScript (no frameworks)
 - Server-Sent Events (real-time)
 - Minimal CSS (desktop-only)
+
+---
+
+## Database Considerations
+
+### SQLite vs Postgres
+
+**SQLite (Current Choice - Good for POC/Single-Node):**
+- ✓ Zero configuration, embedded database
+- ✓ Perfect for single orchestrator node
+- ✓ File-based, easy backups (copy desk.db)
+- ✓ Excellent for development and small deployments
+- ✗ No multi-node orchestrator support
+- ✗ Write concurrency limited (multiple workers = contention)
+- ✗ No advanced transaction isolation (serializable transactions)
+
+**When to Migrate to Postgres:**
+- Need multiple orchestrator replicas (high availability)
+- Heavy write concurrency (many workers claiming tasks)
+- Advanced transaction isolation requirements
+- Horizontal scaling needed
+- Production deployment with 24/7 uptime requirements
+
+**Migration Path:**
+1. Start with SQLite for POC and local development
+2. Abstract database layer (use repository pattern)
+3. When scaling needs arise, migrate to Postgres
+4. Schema is identical (both support standard SQL)
+
+**Current Implementation:**
+```javascript
+// db.js - Easy to swap SQLite for Postgres
+const Database = require('better-sqlite3');  // SQLite
+// const { Pool } = require('pg');           // Postgres (future)
+
+const db = new Database('server/db/desk.db');
+db.pragma('journal_mode = WAL');  // Write-Ahead Logging for better concurrency
+```
+
+**Postgres Upgrade Checklist (Future):**
+- [ ] Replace better-sqlite3 with pg or pg-promise
+- [ ] Add connection pooling
+- [ ] Update query syntax (? → $1, $2 for Postgres)
+- [ ] Add proper transaction isolation levels
+- [ ] Set up replication for HA
+- [ ] Migrate session store to connect-pg-simple
+
+**Decision:** SQLite is sufficient for single-node Desk deployments. Postgres becomes necessary only when scaling to multiple orchestrator nodes or requiring HA/DR.
 
 ---
 
