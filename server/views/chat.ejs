@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title %> - Desk</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="/css/chat.css">
+</head>
+<body class="chat-layout">
+  <!-- Header -->
+  <div class="chat-header">
+    <div class="header-left">
+      <span class="logo">Desk AI</span>
+    </div>
+    <div class="header-right">
+      <span class="user-name">@<%= session.user.username %></span>
+      <form method="POST" action="/logout" style="display: inline;">
+        <button type="submit" class="btn-logout">Logout</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Three-panel layout -->
+  <div class="chat-container">
+    <!-- LEFT: Sidebar (20%) -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <form method="POST" action="/chat">
+          <button type="submit" class="btn-new-chat">+ New Conversation</button>
+        </form>
+      </div>
+
+      <div class="conversations-list">
+        <% if (conversations.length === 0) { %>
+          <div class="empty-state">No conversations yet</div>
+        <% } else { %>
+          <% conversations.forEach(convo => { %>
+            <a
+              href="/chat/<%= convo.id %>"
+              class="conversation-item <%= convo.id == conversation.id ? 'active' : '' %>"
+            >
+              <div class="conversation-title">
+                <%= convo.title || 'New Conversation' %>
+              </div>
+              <div class="conversation-date">
+                <%= new Date(convo.updated_at).toLocaleDateString() %>
+              </div>
+            </a>
+          <% }) %>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- CENTER: Chat (50%) -->
+    <div class="chat-main">
+      <div class="messages" id="messages">
+        <% if (messages.length === 0) { %>
+          <div class="empty-chat">
+            <div class="empty-chat-icon">💬</div>
+            <h2>Start a Conversation</h2>
+            <p>Describe your goal and I'll help you accomplish it using Desk.</p>
+          </div>
+        <% } else { %>
+          <% messages.forEach(msg => { %>
+            <div class="message <%= msg.role %>">
+              <div class="message-icon">
+                <%= msg.role === 'user' ? '👤' : '🤖' %>
+              </div>
+              <div class="message-content">
+                <div class="message-text"><%= msg.content %></div>
+                <div class="message-time">
+                  <%= new Date(msg.created_at).toLocaleTimeString() %>
+                </div>
+              </div>
+            </div>
+          <% }) %>
+        <% } %>
+      </div>
+
+      <div class="chat-input-container">
+        <form id="chatForm">
+          <div class="input-row">
+            <textarea
+              id="messageInput"
+              name="message"
+              placeholder="Type your message..."
+              rows="3"
+              required
+            ></textarea>
+            <div class="input-actions">
+              <label for="fileInput" class="btn-icon" title="Upload files">
+                📎
+              </label>
+              <input
+                type="file"
+                id="fileInput"
+                multiple
+                accept="*/*"
+                style="display: none;"
+              >
+              <button type="submit" class="btn-send" title="Send message">
+                Send
+              </button>
+            </div>
+          </div>
+          <div id="uploadedFiles" class="uploaded-files"></div>
+        </form>
+      </div>
+    </div>
+
+    <!-- RIGHT: Task Panel (30%) -->
+    <div class="task-panel">
+      <div class="task-panel-header">
+        <h3>📋 Tasks</h3>
+      </div>
+
+      <div class="task-panel-content" id="taskPanel">
+        <% if (jobs.length === 0) { %>
+          <div class="empty-state">
+            No tasks yet. Start a conversation and I'll create tasks for your goals.
+          </div>
+        <% } else { %>
+          <% jobs.forEach(job => { %>
+            <div class="job-card" data-job-id="<%= job.job_id %>">
+              <div class="job-header">
+                <strong><%= job.job_id %></strong>
+              </div>
+              <div class="task-list" id="tasks-<%= job.job_id %>">
+                Loading tasks...
+              </div>
+              <div class="artifacts-section" id="artifacts-<%= job.job_id %>">
+                <!-- Artifacts will be populated via JavaScript -->
+              </div>
+            </div>
+          <% }) %>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Pass conversation ID to JavaScript
+    window.CONVERSATION_ID = <%= conversation.id %>;
+    window.JOBS = <%- JSON.stringify(jobs) %>;
+  </script>
+  <script src="/js/chat-client.js"></script>
+</body>
+</html>

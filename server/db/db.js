@@ -14,10 +14,24 @@ const db = new Database(DB_PATH, {
 db.pragma('foreign_keys = ON');
 db.pragma('journal_mode = WAL');
 
-// Run initialization SQL if database is new
+// Run initialization SQL
 const initSql = fs.readFileSync(path.join(__dirname, 'init.sql'), 'utf8');
 db.exec(initSql);
 
-console.log('✅ Database initialized:', DB_PATH);
+// Run all migration files
+const migrationsDir = path.join(__dirname, 'migrations');
+if (fs.existsSync(migrationsDir)) {
+  const migrationFiles = fs.readdirSync(migrationsDir)
+    .filter(filename => filename.endsWith('.sql'))
+    .sort();
+
+  migrationFiles.forEach(filename => {
+    const sqlContent = fs.readFileSync(path.join(migrationsDir, filename), 'utf8');
+    db.exec(sqlContent);
+    console.log(`  ✓ Migration applied: ${filename}`);
+  });
+}
+
+console.log('✅ Database ready:', DB_PATH);
 
 module.exports = db;

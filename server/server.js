@@ -56,16 +56,22 @@ app.use((req, res, next) => {
   next();
 });
 
-// Routes
+// Routes (order matters: signup → auth → chat → API)
+const signupRoutes = require('./routes/signup');
 const authRoutes = require('./routes/auth');
+const chatRoutes = require('./routes/chat');
+const apiRoutes = require('./routes/api');
 const indexRoutes = require('./routes/index');
 const jobsRoutes = require('./routes/jobs');
 const artifactsRoutes = require('./routes/artifacts');
 
-app.use('/', authRoutes);
-app.use('/', indexRoutes);
-app.use('/jobs', jobsRoutes);
-app.use('/artifacts', artifactsRoutes);
+app.use('/signup', signupRoutes); // First-time setup
+app.use('/', authRoutes);         // Login/logout
+app.use('/chat', chatRoutes);     // Chat interface
+app.use('/api', apiRoutes);       // REST API
+app.use('/', indexRoutes);        // Legacy job list
+app.use('/jobs', jobsRoutes);     // Legacy job management
+app.use('/artifacts', artifactsRoutes); // Legacy artifacts
 
 // 404 handler
 app.use((req, res) => {
@@ -84,15 +90,38 @@ app.use((err, req, res, next) => {
   });
 });
 
+// Auto-start WorkerManager for task execution
+const workerManager = require('./lib/worker-manager');
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('\n[Shutdown] SIGTERM received, stopping worker...');
+  workerManager.stop();
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  console.log('\n[Shutdown] SIGINT received, stopping worker...');
+  workerManager.stop();
+  process.exit(0);
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log('='.repeat(60));
-  console.log('Desk Platform MVP - Server Started');
+  console.log('Desk AI Platform - Server Started');
   console.log('='.repeat(60));
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`📂 Jobs directory: ${path.resolve(__dirname, '../jobs')}`);
   console.log(`🗄️  Database: ${path.resolve(__dirname, 'db/desk.db')}`);
   console.log('');
-  console.log('Default login: admin / admin123');
+
+  // Start worker manager
+  console.log('🔧 Starting task worker...');
+  workerManager.start();
+  console.log('✓ Worker started and monitoring for tasks');
+  console.log('');
+
+  console.log('First-time setup: Visit /signup to create admin account');
   console.log('');
 });
