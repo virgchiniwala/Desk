@@ -1,6 +1,6 @@
 # Desk Platform
 
-**A job-first execution platform for government knowledge work**
+**A job-first execution platform for long running knowledge work**
 
 Desk is a minimal, secure platform for managing and executing long-running jobs with phase-based workflows. Built with simplicity and security as core principles.
 
