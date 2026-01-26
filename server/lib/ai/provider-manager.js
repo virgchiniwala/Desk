@@ -3,7 +3,7 @@
  * Handles provider instantiation and selection logic
  */
 
-const db = require('../db/db');
+const db = require('../../db/db');
 const { decryptSecret, isEncryptionAvailable } = require('../crypto');
 const AnthropicProvider = require('./providers/anthropic');
 const OpenAIProvider = require('./providers/openai');
