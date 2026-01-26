@@ -5,7 +5,7 @@
 CREATE TABLE IF NOT EXISTS user_model_configs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL UNIQUE,
-    provider TEXT NOT NULL CHECK(provider IN ('anthropic', 'openai', 'ollama', 'claude-code')),
+    provider TEXT NOT NULL CHECK(provider IN ('anthropic', 'openai', 'ollama', 'claude-code', 'gemini')),
     model TEXT NOT NULL,
     config_json TEXT, -- Non-secret configuration (base URL, etc.)
     secret_encrypted BLOB, -- Encrypted API keys/secrets

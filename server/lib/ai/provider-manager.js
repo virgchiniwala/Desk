@@ -9,13 +9,15 @@ const AnthropicProvider = require('./providers/anthropic');
 const OpenAIProvider = require('./providers/openai');
 const OllamaProvider = require('./providers/ollama');
 const ClaudeCodeProvider = require('./providers/claude-code');
+const GeminiProvider = require('./providers/gemini');
 
 // Provider registry
 const PROVIDERS = {
   'anthropic': AnthropicProvider,
   'openai': OpenAIProvider,
   'ollama': OllamaProvider,
-  'claude-code': ClaudeCodeProvider
+  'claude-code': ClaudeCodeProvider,
+  'gemini': GeminiProvider
 };
 
 /**
@@ -75,6 +77,8 @@ function getInstanceDefaultProvider() {
     if (process.env.CLAUDE_CODE_ARGS) {
       config.config_json.args = process.env.CLAUDE_CODE_ARGS.split(' ');
     }
+  } else if (provider === 'gemini') {
+    config.secret = { apiKey: process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY };
   }
 
   return instantiateProvider(config);
