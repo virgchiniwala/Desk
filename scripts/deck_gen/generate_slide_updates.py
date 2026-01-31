@@ -13,7 +13,7 @@ import sys
 import os
 from anthropic import Anthropic
 
-def generate_updates(metrics, deck_structure, sprint_number=None, date_range=None):
+def generate_updates(metrics, deck_structure, sprint_number=None, date_range=None, template_config=None):
     """
     Call LLM to generate slide content updates.
     
@@ -21,6 +21,7 @@ def generate_updates(metrics, deck_structure, sprint_number=None, date_range=Non
     - Current metrics from Sentry CSV
     - Previous deck structure (slides, tables, text)
     - Sprint context (number, date range)
+    - Template configuration (purpose, audience, instructions)
     
     Returns structured updates for each slide.
     """
@@ -39,7 +40,26 @@ def generate_updates(metrics, deck_structure, sprint_number=None, date_range=Non
         'deck_structure': deck_structure
     }
     
-    prompt = f"""You are updating a sprint deck with new Sentry error metrics.
+    # Load template instructions if provided
+    base_instructions = ""
+    if template_config and 'llm_instructions' in template_config:
+        base_instructions = template_config['llm_instructions']
+        purpose_info = f"""
+## Template Purpose
+- **Type:** {template_config.get('template_name', 'Unknown')}
+- **Focus:** {template_config.get('focus', 'general')}
+- **Audience:** {template_config.get('audience', 'general')}
+
+{base_instructions}
+
+---
+"""
+    else:
+        purpose_info = ""
+    
+    prompt = f"""{purpose_info}
+
+You are updating a deck with new metrics.
 
 ## New Sprint Information
 - Sprint Number: {context['sprint_number']}
@@ -134,7 +154,7 @@ Rules:
 
 if __name__ == '__main__':
     if len(sys.argv) < 4:
-        print("Usage: python generate_slide_updates.py <metrics_json> <structure_json> <output_json> [--sprint-num NUM] [--date-range RANGE]")
+        print("Usage: python generate_slide_updates.py <metrics_json> <structure_json> <output_json> [--sprint-num NUM] [--date-range RANGE] [--template-config PATH]")
         sys.exit(1)
     
     metrics_path = sys.argv[1]
@@ -144,6 +164,7 @@ if __name__ == '__main__':
     # Parse optional arguments
     sprint_num = None
     date_range = None
+    template_config_path = None
     
     i = 4
     while i < len(sys.argv):
@@ -152,6 +173,9 @@ if __name__ == '__main__':
             i += 2
         elif sys.argv[i] == '--date-range' and i + 1 < len(sys.argv):
             date_range = sys.argv[i + 1]
+            i += 2
+        elif sys.argv[i] == '--template-config' and i + 1 < len(sys.argv):
+            template_config_path = sys.argv[i + 1]
             i += 2
         else:
             i += 1
@@ -165,7 +189,16 @@ if __name__ == '__main__':
     with open(structure_path) as f:
         deck_structure = json.load(f)
     
-    updates = generate_updates(metrics, deck_structure, sprint_num, date_range)
+    # Load template config if provided
+    template_config = None
+    if template_config_path and os.path.exists(template_config_path):
+        print(f"📋 Loading template config from: {template_config_path}")
+        with open(template_config_path) as f:
+            template_config = json.load(f)
+        print(f"   Purpose: {template_config.get('purpose', 'unknown')}")
+        print(f"   Template: {template_config.get('template_name', 'unknown')}")
+    
+    updates = generate_updates(metrics, deck_structure, sprint_num, date_range, template_config)
     
     # Save updates
     with open(output_path, 'w') as f:
