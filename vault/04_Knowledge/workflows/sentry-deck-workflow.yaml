@@ -1,0 +1,119 @@
+# Sentry Dashboard → Sprint Deck Workflow (PowerPoint Generation)
+# Runs every 2 weeks
+# Generates actual .pptx file with updated metrics
+
+workflow:
+  id: sentry-sprint-deck-v1
+  name: Sentry Sprint Deck Generation
+  description: Generate updated PowerPoint deck from Sentry data + previous deck
+  schedule: biweekly
+  
+inputs:
+  - name: sentry_csv
+    type: file
+    label: "Sentry dashboard export (CSV)"
+    formats: [csv]
+    required: true
+    description: "Export from Sentry dashboard with error metrics"
+    
+  - name: previous_deck
+    type: file
+    label: "Previous sprint deck (.pptx)"
+    formats: [pptx]
+    required: true
+    description: "Last sprint's deck - we'll copy its structure and update numbers"
+    
+  - name: sprint_number
+    type: string
+    label: "Sprint number"
+    placeholder: "12"
+    required: true
+    
+  - name: date_range
+    type: string
+    label: "Sprint date range"
+    placeholder: "Jan 18 - Jan 31, 2026"
+    required: true
+
+# How to process Sentry data and update slides
+deck_generation_instructions: |
+  You are generating a sprint deck by analyzing Sentry error data and updating
+  a PowerPoint template.
+  
+  ## Input Processing
+  
+  1. Parse Sentry CSV to extract:
+     - Error counts by type
+     - Error rate trends (vs previous period if available)
+     - Top issues (by frequency)
+     - New errors introduced
+     - Resolved errors
+  
+  2. Read previous deck structure:
+     - Identify slides containing metrics
+     - Preserve layout, styling, charts
+     - Only update data/text, not design
+  
+  ## Slide Updates
+  
+  For each metric slide:
+  1. Replace old sprint number → new sprint number
+  2. Replace old date range → new date range
+  3. Update error count tables with new CSV data
+  4. Update trend percentages (calculate: (new - old) / old * 100)
+  5. Update "Top Issues" lists with current top 5
+  6. Add executive summary based on data trends
+  
+  ## Data Formatting Rules
+  
+  - Percentages: Show with + or - prefix (e.g., "+15%" or "-23%")
+  - Trends: Use ↑ for increases, ↓ for decreases
+  - Large numbers: Use K/M notation (1.2K, 3.4M)
+  - Dates: Use format "MMM DD, YYYY"
+  - Tables: Preserve existing table structure
+  
+  ## Slide Identification (Update as needed based on actual deck)
+  
+  - Slide 1: Title slide (update sprint number + date)
+  - Slide 2: Executive Summary (generate new based on data)
+  - Slide 3: Error Trends (update table + chart data)
+  - Slide 4: Top Issues (update list)
+  - Slide 5: Resolution Status (update metrics)
+  - Slide 6: Recommendations (keep previous + add new if needed)
+
+tasks:
+  - name: parse_sentry_data
+    description: Extract metrics from Sentry CSV
+    command: python scripts/deck_gen/parse_sentry_csv.py jobs/{{job_id}}/inputs/sentry_csv jobs/{{job_id}}/tmp/metrics.json
+    blockedBy: []
+    
+  - name: analyze_previous_deck
+    description: Parse structure of previous deck
+    command: python scripts/deck_gen/analyze_pptx.py jobs/{{job_id}}/inputs/previous_deck jobs/{{job_id}}/tmp/deck_structure.json
+    blockedBy: []
+    
+  - name: generate_updates
+    description: Use LLM to create slide content updates
+    command: python scripts/deck_gen/generate_slide_updates.py jobs/{{job_id}}/tmp/metrics.json jobs/{{job_id}}/tmp/deck_structure.json jobs/{{job_id}}/tmp/slide_updates.json
+    blockedBy: [parse_sentry_data, analyze_previous_deck]
+    
+  - name: build_deck
+    description: Generate new .pptx with updated content
+    command: python scripts/deck_gen/build_pptx.py jobs/{{job_id}}/inputs/previous_deck jobs/{{job_id}}/tmp/slide_updates.json jobs/{{job_id}}/output/SPRINT_{{sprint_number}}_deck.pptx
+    blockedBy: [generate_updates]
+    
+  - name: validate_output
+    description: Verify .pptx is valid and editable
+    command: python scripts/deck_gen/validate_pptx.py jobs/{{job_id}}/output/SPRINT_{{sprint_number}}_deck.pptx
+    blockedBy: [build_deck]
+
+outputs:
+  - name: updated_deck
+    path: output/SPRINT_{{sprint_number}}_deck.pptx
+    type: pptx
+    description: "Editable PowerPoint deck with updated metrics"
+    
+  - name: metrics_summary
+    path: tmp/metrics.json
+    type: json
+    description: "Extracted metrics for reference"

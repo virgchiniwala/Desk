@@ -1,0 +1,13 @@
+# PowerPoint Deck Generation Dependencies
+
+# Core PowerPoint manipulation
+python-pptx==0.6.23
+
+# Data processing
+pandas==2.2.0
+
+# LLM integration
+anthropic==0.39.0
+
+# Optional: Excel compatibility if needed
+openpyxl==3.1.2
