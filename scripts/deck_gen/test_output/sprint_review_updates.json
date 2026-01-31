@@ -1,0 +1,112 @@
+{
+  "slides": [
+    {
+      "slide_index": 0,
+      "updates": [
+        {
+          "type": "title",
+          "old_text": "Sprint 11 Review",
+          "new_text": "Sprint 12 Review"
+        },
+        {
+          "type": "text_box",
+          "shape_id": 101,
+          "old_text": "Jan 4 - Jan 17, 2026",
+          "new_text": "Jan 18 - Jan 31, 2026"
+        }
+      ]
+    },
+    {
+      "slide_index": 1,
+      "updates": [
+        {
+          "type": "text_box",
+          "shape_id": 201,
+          "old_text": "Total errors: 1,115",
+          "new_text": "Total errors: 981 (\u219312% from last sprint)"
+        },
+        {
+          "type": "text_box",
+          "shape_id": 202,
+          "old_text": "Critical issues: 7",
+          "new_text": "Critical issues: 0"
+        }
+      ]
+    },
+    {
+      "slide_index": 2,
+      "updates": [
+        {
+          "type": "table",
+          "table_index": 0,
+          "row_updates": [
+            {
+              "row_index": 1,
+              "col_index": 1,
+              "old_text": "421",
+              "new_text": "234"
+            },
+            {
+              "row_index": 1,
+              "col_index": 2,
+              "old_text": "389",
+              "new_text": "421"
+            },
+            {
+              "row_index": 5,
+              "col_index": 1,
+              "old_text": "1,115",
+              "new_text": "981"
+            },
+            {
+              "row_index": 5,
+              "col_index": 2,
+              "old_text": "1,267",
+              "new_text": "1,115"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slide_index": 3,
+      "updates": [
+        {
+          "type": "text_box",
+          "shape_id": 401,
+          "old_text": "1. API Gateway timeout (312 errors)",
+          "new_text": "1. API Timeout on /users endpoint (234 errors)"
+        },
+        {
+          "type": "text_box",
+          "shape_id": 402,
+          "old_text": "2. DB pool exhaustion (256 errors)",
+          "new_text": "2. Database connection pool exhausted (187 errors)"
+        },
+        {
+          "type": "text_box",
+          "shape_id": 403,
+          "old_text": "3. Payment processor timeout (198 errors)",
+          "new_text": "3. Null pointer exception in payment flow (156 errors)"
+        }
+      ]
+    },
+    {
+      "slide_index": 4,
+      "updates": [
+        {
+          "type": "text_box",
+          "shape_id": 501,
+          "old_text": "Resolved: 5 issues",
+          "new_text": "Resolved: 8 issues"
+        },
+        {
+          "type": "text_box",
+          "shape_id": 503,
+          "old_text": "Unresolved: 7 issues",
+          "new_text": "Unresolved: 0 issues"
+        }
+      ]
+    }
+  ]
+}

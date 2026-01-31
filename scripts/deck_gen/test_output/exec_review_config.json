@@ -1,0 +1,15 @@
+{
+  "purpose": "exec_review",
+  "template_name": "Executive Review Template",
+  "template_file": "exec_review_template.pptx",
+  "focus": "strategic",
+  "audience": "leadership",
+  "sections": [
+    "Executive Summary",
+    "Key Trends",
+    "Business Impact",
+    "Strategic Risks",
+    "Recommendations"
+  ],
+  "llm_instructions": "You are transforming raw data into a Executive Review Template.\n\n## Audience & Purpose\n- **Audience:** leadership\n- **Focus:** strategic\n- **Tone:** high-level and strategic\n\n## Required Sections\n- Executive Summary\n- Key Trends\n- Business Impact\n- Strategic Risks\n- Recommendations\n\n## Transformation Guidelines\n\n\n### Executive Review Focus:\n1. **Start with impact** - Business consequences, not technical details\n2. **Show trends** - Month-over-month, quarter-over-quarter\n3. **Be concise** - Executives need the \"so what\", not the \"what\"\n4. **Strategic framing** - How does this affect goals/OKRs?\n5. **Actionable insights** - What decisions need to be made?\n\n### Data Handling:\n- Aggregate to high-level trends\n- Focus on top 3 issues only\n- Show business impact (uptime, revenue, user experience)\n- Compare to goals/benchmarks\n- Provide clear recommendations\n\n\n## Output Format\nGenerate slide content that matches the template structure. Each section should be:\n- Clear and scannable\n- Data-driven where possible\n- Appropriate to audience level\n- Formatted for slides (not paragraphs)\n"
+}

@@ -1,0 +1,144 @@
+{
+  "slide_count": 6,
+  "metadata": {
+    "filename": "sprint_11_deck.pptx",
+    "has_master": true
+  },
+  "slides": [
+    {
+      "index": 0,
+      "title": "Sprint 11 Review",
+      "tables": [],
+      "text_boxes": [
+        {
+          "shape_id": 101,
+          "text": "Jan 4 - Jan 17, 2026",
+          "has_number": true
+        }
+      ],
+      "has_chart": false,
+      "shape_count": 5
+    },
+    {
+      "index": 1,
+      "title": "Executive Summary",
+      "tables": [],
+      "text_boxes": [
+        {
+          "shape_id": 201,
+          "text": "Total errors: 1,115",
+          "has_number": true
+        },
+        {
+          "shape_id": 202,
+          "text": "Critical issues: 7",
+          "has_number": true
+        }
+      ],
+      "has_chart": false,
+      "shape_count": 8
+    },
+    {
+      "index": 2,
+      "title": "Error Trends",
+      "tables": [
+        {
+          "shape_id": 301,
+          "rows": 6,
+          "cols": 3,
+          "data": [
+            [
+              "Error Type",
+              "This Sprint",
+              "Last Sprint"
+            ],
+            [
+              "API Errors",
+              "421",
+              "389"
+            ],
+            [
+              "Database Errors",
+              "387",
+              "412"
+            ],
+            [
+              "Payment Errors",
+              "289",
+              "245"
+            ],
+            [
+              "Cache Errors",
+              "234",
+              "198"
+            ],
+            [
+              "Total",
+              "1,115",
+              "1,267"
+            ]
+          ]
+        }
+      ],
+      "text_boxes": [],
+      "has_chart": false,
+      "shape_count": 4
+    },
+    {
+      "index": 3,
+      "title": "Top Issues",
+      "tables": [],
+      "text_boxes": [
+        {
+          "shape_id": 401,
+          "text": "1. API Gateway timeout (312 errors)",
+          "has_number": true
+        },
+        {
+          "shape_id": 402,
+          "text": "2. DB pool exhaustion (256 errors)",
+          "has_number": true
+        },
+        {
+          "shape_id": 403,
+          "text": "3. Payment processor timeout (198 errors)",
+          "has_number": true
+        }
+      ],
+      "has_chart": false,
+      "shape_count": 10
+    },
+    {
+      "index": 4,
+      "title": "Resolution Status",
+      "tables": [],
+      "text_boxes": [
+        {
+          "shape_id": 501,
+          "text": "Resolved: 5 issues",
+          "has_number": true
+        },
+        {
+          "shape_id": 502,
+          "text": "In Progress: 3 issues",
+          "has_number": true
+        },
+        {
+          "shape_id": 503,
+          "text": "Unresolved: 7 issues",
+          "has_number": true
+        }
+      ],
+      "has_chart": false,
+      "shape_count": 7
+    },
+    {
+      "index": 5,
+      "title": "Next Steps",
+      "tables": [],
+      "text_boxes": [],
+      "has_chart": false,
+      "shape_count": 4
+    }
+  ]
+}
