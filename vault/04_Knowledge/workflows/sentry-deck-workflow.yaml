@@ -1,13 +1,15 @@
-# Sentry Dashboard → Sprint Deck Workflow (PowerPoint Generation)
-# Runs every 2 weeks
-# Generates actual .pptx file with updated metrics
+# Sentry Dashboard → Deck Workflow (Multi-Template)
+# Supports: sprint_review (every 2 weeks), exec_review (monthly)
+# Generates actual editable .pptx from raw data + previous deck
 
 workflow:
-  id: sentry-sprint-deck-v1
-  name: Sentry Sprint Deck Generation
-  description: Generate updated PowerPoint deck from Sentry data + previous deck
-  schedule: biweekly
-  
+  id: sentry-deck-v2
+  name: Sentry Deck Generation
+  description: |
+    Generate updated PowerPoint deck from Sentry data + previous deck.
+    Same data, different views depending on audience.
+  schedule: biweekly  # sprint_review every 2 weeks, exec_review monthly
+
 inputs:
   - name: sentry_csv
     type: file
@@ -15,105 +17,147 @@ inputs:
     formats: [csv]
     required: true
     description: "Export from Sentry dashboard with error metrics"
-    
+
   - name: previous_deck
     type: file
-    label: "Previous sprint deck (.pptx)"
+    label: "Previous deck (.pptx)"
     formats: [pptx]
     required: true
-    description: "Last sprint's deck - we'll copy its structure and update numbers"
-    
+    description: "Last sprint/exec deck - structure and design will be preserved"
+
+  - name: purpose
+    type: select
+    label: "Deck type"
+    options:
+      - sprint_review: "Sprint Review (tactical, team-facing)"
+      - exec_review: "Exec Review (strategic, leadership-facing)"
+    required: true
+    description: "Controls narrative, detail level, and audience framing"
+
   - name: sprint_number
     type: string
     label: "Sprint number"
     placeholder: "12"
     required: true
-    
+
   - name: date_range
     type: string
-    label: "Sprint date range"
+    label: "Date range"
     placeholder: "Jan 18 - Jan 31, 2026"
     required: true
 
-# How to process Sentry data and update slides
-deck_generation_instructions: |
-  You are generating a sprint deck by analyzing Sentry error data and updating
-  a PowerPoint template.
-  
-  ## Input Processing
-  
-  1. Parse Sentry CSV to extract:
-     - Error counts by type
-     - Error rate trends (vs previous period if available)
-     - Top issues (by frequency)
-     - New errors introduced
-     - Resolved errors
-  
-  2. Read previous deck structure:
-     - Identify slides containing metrics
-     - Preserve layout, styling, charts
-     - Only update data/text, not design
-  
-  ## Slide Updates
-  
-  For each metric slide:
-  1. Replace old sprint number → new sprint number
-  2. Replace old date range → new date range
-  3. Update error count tables with new CSV data
-  4. Update trend percentages (calculate: (new - old) / old * 100)
-  5. Update "Top Issues" lists with current top 5
-  6. Add executive summary based on data trends
-  
-  ## Data Formatting Rules
-  
-  - Percentages: Show with + or - prefix (e.g., "+15%" or "-23%")
-  - Trends: Use ↑ for increases, ↓ for decreases
-  - Large numbers: Use K/M notation (1.2K, 3.4M)
-  - Dates: Use format "MMM DD, YYYY"
-  - Tables: Preserve existing table structure
-  
-  ## Slide Identification (Update as needed based on actual deck)
-  
-  - Slide 1: Title slide (update sprint number + date)
-  - Slide 2: Executive Summary (generate new based on data)
-  - Slide 3: Error Trends (update table + chart data)
-  - Slide 4: Top Issues (update list)
-  - Slide 5: Resolution Status (update metrics)
-  - Slide 6: Recommendations (keep previous + add new if needed)
+# Purpose-driven transformation rules
+# sprint_review: detailed metrics, blockers, all issues, next steps
+# exec_review: high-level trends, business impact, top 3 only, recommendations
+templates:
+  sprint_review:
+    audience: team
+    focus: tactical
+    tone: "detailed and operational"
+    sections:
+      - Sprint Summary
+      - Metrics & KPIs
+      - Completed Work
+      - Blockers & Issues
+      - Next Sprint Plan
+    data_handling:
+      - Include all error counts and types
+      - Show resolution rates
+      - List top 5-10 issues with details
+      - Calculate sprint-over-sprint changes
+      - Flag new vs recurring issues
+
+  exec_review:
+    audience: leadership
+    focus: strategic
+    tone: "high-level and strategic"
+    sections:
+      - Executive Summary
+      - Key Trends
+      - Business Impact
+      - Strategic Risks
+      - Recommendations
+    data_handling:
+      - Aggregate to high-level trends
+      - Focus on top 3 issues only
+      - Show business impact (uptime, revenue, user experience)
+      - Compare to goals/benchmarks
+      - Provide clear recommendations
 
 tasks:
   - name: parse_sentry_data
     description: Extract metrics from Sentry CSV
-    command: python scripts/deck_gen/parse_sentry_csv.py jobs/{{job_id}}/inputs/sentry_csv jobs/{{job_id}}/tmp/metrics.json
+    command: >
+      python scripts/deck_gen/parse_sentry_csv.py
+      jobs/{{job_id}}/inputs/sentry_csv
+      jobs/{{job_id}}/tmp/metrics.json
     blockedBy: []
-    
+
   - name: analyze_previous_deck
     description: Parse structure of previous deck
-    command: python scripts/deck_gen/analyze_pptx.py jobs/{{job_id}}/inputs/previous_deck jobs/{{job_id}}/tmp/deck_structure.json
+    command: >
+      python scripts/deck_gen/analyze_pptx.py
+      jobs/{{job_id}}/inputs/previous_deck
+      jobs/{{job_id}}/tmp/deck_structure.json
     blockedBy: []
-    
+
+  - name: select_template
+    description: Load template config based on purpose (sprint_review or exec_review)
+    command: >
+      python scripts/deck_gen/template_selector.py
+      {{purpose}}
+      vault/04_Knowledge/workflows/templates
+      jobs/{{job_id}}/tmp/template_config.json
+    blockedBy: []
+
   - name: generate_updates
-    description: Use LLM to create slide content updates
-    command: python scripts/deck_gen/generate_slide_updates.py jobs/{{job_id}}/tmp/metrics.json jobs/{{job_id}}/tmp/deck_structure.json jobs/{{job_id}}/tmp/slide_updates.json
-    blockedBy: [parse_sentry_data, analyze_previous_deck]
-    
+    description: Use LLM to create purpose-aware slide content updates
+    command: >
+      python scripts/deck_gen/generate_slide_updates.py
+      jobs/{{job_id}}/tmp/metrics.json
+      jobs/{{job_id}}/tmp/deck_structure.json
+      jobs/{{job_id}}/tmp/slide_updates.json
+      --sprint-num {{sprint_number}}
+      --date-range "{{date_range}}"
+      --template-config jobs/{{job_id}}/tmp/template_config.json
+    blockedBy: [parse_sentry_data, analyze_previous_deck, select_template]
+
   - name: build_deck
     description: Generate new .pptx with updated content
-    command: python scripts/deck_gen/build_pptx.py jobs/{{job_id}}/inputs/previous_deck jobs/{{job_id}}/tmp/slide_updates.json jobs/{{job_id}}/output/SPRINT_{{sprint_number}}_deck.pptx
+    command: >
+      python scripts/deck_gen/build_pptx.py
+      jobs/{{job_id}}/inputs/previous_deck
+      jobs/{{job_id}}/tmp/slide_updates.json
+      jobs/{{job_id}}/output/{{purpose}}_sprint_{{sprint_number}}.pptx
     blockedBy: [generate_updates]
-    
+
   - name: validate_output
     description: Verify .pptx is valid and editable
-    command: python scripts/deck_gen/validate_pptx.py jobs/{{job_id}}/output/SPRINT_{{sprint_number}}_deck.pptx
+    command: >
+      python scripts/deck_gen/validate_pptx.py
+      jobs/{{job_id}}/output/{{purpose}}_sprint_{{sprint_number}}.pptx
     blockedBy: [build_deck]
 
 outputs:
   - name: updated_deck
-    path: output/SPRINT_{{sprint_number}}_deck.pptx
+    path: output/{{purpose}}_sprint_{{sprint_number}}.pptx
     type: pptx
     description: "Editable PowerPoint deck with updated metrics"
-    
+
   - name: metrics_summary
     path: tmp/metrics.json
     type: json
     description: "Extracted metrics for reference"
+
+# Example usage:
+# Sprint review:
+#   purpose: sprint_review
+#   sprint_number: 12
+#   date_range: "Jan 18 - Jan 31, 2026"
+#   → output: sprint_review_sprint_12.pptx
+#
+# Exec review:
+#   purpose: exec_review
+#   sprint_number: 12
+#   date_range: "Jan 18 - Jan 31, 2026"
+#   → output: exec_review_sprint_12.pptx
