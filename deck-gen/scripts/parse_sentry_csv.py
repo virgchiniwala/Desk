@@ -11,6 +11,8 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from typing import Optional
+
 import pandas as pd
 
 
@@ -19,7 +21,7 @@ def _normalize_status(status: str) -> str:
     return status.strip().lower()
 
 
-def _compute_new_errors(df: pd.DataFrame, window_days: int = 14) -> int | None:
+def _compute_new_errors(df: pd.DataFrame, window_days: int = 14) -> Optional[int]:
     """Count errors first seen within the last `window_days`.
 
     Returns None if 'First Seen' column is missing or unparseable.

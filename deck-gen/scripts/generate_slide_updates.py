@@ -14,6 +14,65 @@ from pathlib import Path
 
 import anthropic
 
+# ---------------------------------------------------------------------------
+# Retry configuration
+# ---------------------------------------------------------------------------
+MAX_RETRIES = 3
+RETRY_DELAYS = [1.0, 2.0, 4.0]  # exponential backoff in seconds
+RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+
+
+def _is_retryable(error: Exception) -> bool:
+    """Return True if this API error is worth retrying."""
+    if isinstance(error, anthropic.RateLimitError):
+        return True
+    if isinstance(error, anthropic.APIStatusError) and error.status_code in RETRYABLE_STATUS_CODES:
+        return True
+    if isinstance(error, (anthropic.APIConnectionError, anthropic.APITimeoutError)):
+        return True
+    return False
+
+
+def _call_api_with_retry(client: anthropic.Anthropic, prompt: str) -> str:
+    """Call Claude API with exponential backoff on transient failures.
+
+    Retries on: 429 (rate limit), 5xx (server errors), connection/timeout.
+    Raises immediately on 4xx client errors (except 429).
+
+    Returns the response text.
+    """
+    last_error = None  # type: Exception | None
+
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            message = client.messages.create(
+                model="claude-opus-4-5",
+                max_tokens=4096,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return message.content[0].text
+        except Exception as e:
+            last_error = e
+            if not _is_retryable(e):
+                raise
+
+            if attempt < MAX_RETRIES:
+                delay = (
+                    RETRY_DELAYS[attempt]
+                    if attempt < len(RETRY_DELAYS)
+                    else RETRY_DELAYS[-1] * (2 ** (attempt - len(RETRY_DELAYS) + 1))
+                )
+                print(
+                    f"  Retry {attempt + 1}/{MAX_RETRIES} after {delay}s "
+                    f"(error: {type(e).__name__})",
+                    file=sys.stderr,
+                )
+                time.sleep(delay)
+            else:
+                raise
+
+    raise last_error  # pragma: no cover — loop always raises before here
+
 
 def _strip_json_fence(text: str) -> str:
     """Strip markdown JSON code fences from LLM response.
@@ -81,12 +140,7 @@ def generate_slide_updates(template_analysis_path: str, metrics_path: str) -> li
     prompt = _build_prompt(template_analysis, metrics)
 
     print("Calling Claude API...", file=sys.stderr)
-    message = client.messages.create(
-        model="claude-opus-4-5",
-        max_tokens=4096,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    raw_response = message.content[0].text
+    raw_response = _call_api_with_retry(client, prompt)
 
     # Parse response
     json_text = _strip_json_fence(raw_response)
