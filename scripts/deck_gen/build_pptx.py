@@ -58,23 +58,71 @@ def build_updated_deck(previous_deck_path, updates_path, output_path):
     
     return output_path
 
+def replace_text_preserve_format(text_frame, old_text, new_text):
+    """
+    Replace text within a text frame while preserving run-level formatting.
+    
+    python-pptx gotcha: setting shape.text or paragraph.text replaces ALL runs
+    with a single default-formatted run, nuking bold/italic/color/size.
+    This function finds the run containing old_text and does an in-place
+    replacement, keeping every run's font properties intact.
+    
+    Falls back to first-run replacement if old_text spans multiple runs.
+    """
+    # Fast path: single-run paragraph (most common in decks)
+    for paragraph in text_frame.paragraphs:
+        full_text = paragraph.text
+        if old_text not in full_text:
+            continue
+        
+        # Try run-level replacement first (preserves formatting perfectly)
+        for run in paragraph.runs:
+            if old_text in run.text:
+                run.text = run.text.replace(old_text, new_text)
+                return True
+        
+        # old_text spans multiple runs — rebuild using first run's formatting
+        if paragraph.runs:
+            replaced = full_text.replace(old_text, new_text)
+            # Keep first run with new text, clear the rest
+            paragraph.runs[0].text = replaced
+            for run in paragraph.runs[1:]:
+                run.text = ""
+            return True
+    
+    return False
+
+
 def apply_update(slide, update):
     """Apply a single update to a slide."""
     
     update_type = update.get('type')
     
     if update_type == 'title':
-        # Update slide title
-        if slide.shapes.title:
+        # Update slide title — preserve formatting via run-level replacement
+        if slide.shapes.title and slide.shapes.title.has_text_frame:
             old_text = update.get('old_text', '')
             new_text = update.get('new_text', '')
             
-            current_text = slide.shapes.title.text
-            if old_text in current_text:
-                slide.shapes.title.text = current_text.replace(old_text, new_text)
+            if old_text:
+                if not replace_text_preserve_format(slide.shapes.title.text_frame, old_text, new_text):
+                    # old_text not found — set new_text on first run to preserve font
+                    tf = slide.shapes.title.text_frame
+                    if tf.paragraphs and tf.paragraphs[0].runs:
+                        tf.paragraphs[0].runs[0].text = new_text
+                        for run in tf.paragraphs[0].runs[1:]:
+                            run.text = ""
+                    else:
+                        slide.shapes.title.text = new_text
             else:
-                # Just set the new text if old doesn't match
-                slide.shapes.title.text = new_text
+                # No old_text anchor — write to first run if possible
+                tf = slide.shapes.title.text_frame
+                if tf.paragraphs and tf.paragraphs[0].runs:
+                    tf.paragraphs[0].runs[0].text = new_text
+                    for run in tf.paragraphs[0].runs[1:]:
+                        run.text = ""
+                else:
+                    slide.shapes.title.text = new_text
     
     elif update_type == 'table':
         # Update table data
@@ -93,40 +141,61 @@ def apply_update(slide, update):
                         new_text = str(row_update['new_text'])
                         
                         if row_idx < len(table.rows) and col_idx < len(table.columns):
-                            table.cell(row_idx, col_idx).text = new_text
+                            cell = table.cell(row_idx, col_idx)
+                            # Preserve cell formatting via run-level update
+                            if cell.has_text_frame and cell.text_frame.paragraphs:
+                                para = cell.text_frame.paragraphs[0]
+                                if para.runs:
+                                    para.runs[0].text = new_text
+                                    for run in para.runs[1:]:
+                                        run.text = ""
+                                else:
+                                    cell.text = new_text
+                            else:
+                                cell.text = new_text
                     
                     break
                 tables_found += 1
     
     elif update_type == 'text_box':
-        # Update specific text box by shape_id
+        # Update specific text box by shape_id — preserve formatting
         shape_id = update.get('shape_id')
         old_text = update.get('old_text', '')
         new_text = update.get('new_text', '')
         
         for shape in slide.shapes:
-            if shape.shape_id == shape_id and hasattr(shape, 'text'):
-                current_text = shape.text
+            if shape.shape_id == shape_id and hasattr(shape, 'text_frame'):
                 if old_text:
-                    # Replace old with new
-                    shape.text = current_text.replace(old_text, new_text)
+                    if not replace_text_preserve_format(shape.text_frame, old_text, new_text):
+                        # Fallback: write to first run
+                        tf = shape.text_frame
+                        if tf.paragraphs and tf.paragraphs[0].runs:
+                            tf.paragraphs[0].runs[0].text = new_text
+                            for run in tf.paragraphs[0].runs[1:]:
+                                run.text = ""
+                        else:
+                            shape.text = new_text
                 else:
-                    # Just set new text
-                    shape.text = new_text
+                    tf = shape.text_frame
+                    if tf.paragraphs and tf.paragraphs[0].runs:
+                        tf.paragraphs[0].runs[0].text = new_text
+                        for run in tf.paragraphs[0].runs[1:]:
+                            run.text = ""
+                    else:
+                        shape.text = new_text
                 break
     
     elif update_type == 'text_replace':
-        # Find and replace text anywhere on slide
+        # Find and replace text anywhere on slide — preserve formatting
         old_text = update.get('old_text', '')
         new_text = update.get('new_text', '')
         
         if not old_text:
             return
         
-        # Search all text shapes
         for shape in slide.shapes:
-            if hasattr(shape, 'text') and old_text in shape.text:
-                shape.text = shape.text.replace(old_text, new_text)
+            if hasattr(shape, 'text_frame') and old_text in shape.text:
+                replace_text_preserve_format(shape.text_frame, old_text, new_text)
 
 def validate_output(output_path):
     """Quick validation that output is a valid PowerPoint."""

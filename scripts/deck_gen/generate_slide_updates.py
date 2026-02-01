@@ -139,10 +139,15 @@ Rules:
     # Extract JSON from response
     response_text = response.content[0].text.strip()
     
-    # Remove markdown code blocks if present
+    # Remove markdown code blocks if present (handles ```json, ```, etc.)
     if response_text.startswith('```'):
         lines = response_text.split('\n')
-        response_text = '\n'.join(lines[1:-1] if lines[-1].strip() == '```' else lines[1:])
+        # Strip opening fence (may have language tag like ```json)
+        lines = lines[1:]
+        # Strip closing fence if present
+        if lines and lines[-1].strip() == '```':
+            lines = lines[:-1]
+        response_text = '\n'.join(lines).strip()
     
     try:
         updates = json.loads(response_text)

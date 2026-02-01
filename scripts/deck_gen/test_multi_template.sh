@@ -35,8 +35,8 @@ python3 template_selector.py \
   "$TEST_DIR/sprint_review_config.json"
 echo ""
 
-echo "Step 3b: Generating slide updates for Sprint Review..."
-python3 generate_slide_updates.py \
+echo "Step 3b: Generating slide updates for Sprint Review (mock mode)..."
+python3 generate_slide_updates_mock.py \
   "$TEST_DIR/metrics.json" \
   "$TEST_DIR/deck_structure.json" \
   "$TEST_DIR/sprint_review_updates.json" \
@@ -53,8 +53,8 @@ python3 template_selector.py \
   "$TEST_DIR/exec_review_config.json"
 echo ""
 
-echo "Step 4b: Generating slide updates for Exec Review..."
-python3 generate_slide_updates.py \
+echo "Step 4b: Generating slide updates for Exec Review (mock mode)..."
+python3 generate_slide_updates_mock.py \
   "$TEST_DIR/metrics.json" \
   "$TEST_DIR/deck_structure.json" \
   "$TEST_DIR/exec_review_updates.json" \

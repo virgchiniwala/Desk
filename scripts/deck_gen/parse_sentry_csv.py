@@ -71,22 +71,41 @@ def parse_sentry_csv(csv_path):
         
         # Add status breakdown if available
         if status_col:
-            metrics['resolved_count'] = len(df[df[status_col].str.contains('resolved', case=False, na=False)])
-            metrics['unresolved_count'] = len(df[~df[status_col].str.contains('resolved', case=False, na=False)])
+            # Normalize status values for accurate matching
+            status_normalized = df[status_col].str.strip().str.lower()
+            metrics['resolved_count'] = int((status_normalized == 'resolved').sum())
+            metrics['unresolved_count'] = int((status_normalized != 'resolved').sum())
         else:
             metrics['resolved_count'] = 0
             metrics['unresolved_count'] = metrics['error_types']
         
-        # Estimate new errors (within last 14 days) if date columns exist
-        # This is placeholder logic - needs actual date comparison
-        metrics['new_errors'] = int(metrics['error_types'] * 0.2)  # ~20% new
+        # Calculate new errors from First Seen column if available
+        first_seen_col = None
+        for col in df.columns:
+            if 'first' in col and 'seen' in col:
+                first_seen_col = col
+                break
+        
+        if first_seen_col:
+            try:
+                df[first_seen_col] = pd.to_datetime(df[first_seen_col])
+                cutoff = datetime.now() - timedelta(days=14)
+                metrics['new_errors'] = int((df[first_seen_col] >= cutoff).sum())
+            except (ValueError, TypeError):
+                # Date column exists but can't be parsed — omit rather than guess
+                metrics['new_errors'] = None
+                print(f"⚠️  Could not parse '{first_seen_col}' dates. new_errors omitted.")
+        else:
+            # No date column at all — explicitly null, not a guess
+            metrics['new_errors'] = None
+            print(f"⚠️  No 'First Seen' column found. new_errors omitted from metrics.")
         
         return metrics
         
     except Exception as e:
-        print(f"⚠️  Error parsing CSV: {e}")
-        print(f"⚠️  Falling back to mock data for development")
-        return create_mock_metrics()
+        print(f"❌ Error parsing CSV: {e}")
+        print(f"❌ Aborting. Provide --mock flag to use mock data explicitly.")
+        raise
 
 def create_mock_metrics():
     """Create mock metrics for development/testing."""
@@ -113,16 +132,24 @@ def create_mock_metrics():
     }
 
 if __name__ == '__main__':
-    if len(sys.argv) != 3:
-        print("Usage: python parse_sentry_csv.py <csv_path> <output_json_path>")
+    # Support: parse_sentry_csv.py <csv_path> <output_json> [--mock]
+    use_mock = '--mock' in sys.argv
+    args = [a for a in sys.argv[1:] if a != '--mock']
+    
+    if len(args) != 2:
+        print("Usage: python parse_sentry_csv.py <csv_path> <output_json_path> [--mock]")
+        print("  --mock  Use mock data instead of parsing CSV (for development)")
         sys.exit(1)
     
-    csv_path = sys.argv[1]
-    output_path = sys.argv[2]
+    csv_path = args[0]
+    output_path = args[1]
     
-    print(f"📊 Parsing Sentry CSV: {csv_path}")
-    
-    metrics = parse_sentry_csv(csv_path)
+    if use_mock:
+        print(f"📊 Mock mode enabled — using synthetic data")
+        metrics = create_mock_metrics()
+    else:
+        print(f"📊 Parsing Sentry CSV: {csv_path}")
+        metrics = parse_sentry_csv(csv_path)
     
     # Save metrics to JSON
     with open(output_path, 'w') as f:

@@ -33,7 +33,7 @@
     "Email service rate limit hit": 54,
     "Search indexing timeout": 43
   },
-  "resolved_count": 8,
-  "unresolved_count": 0,
-  "new_errors": 1
+  "resolved_count": 2,
+  "unresolved_count": 6,
+  "new_errors": 4
 }
