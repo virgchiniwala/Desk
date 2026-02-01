@@ -1,0 +1,39 @@
+{
+  "total_errors": 981,
+  "error_types": 8,
+  "top_issues": [
+    {
+      "error_type": "API Timeout on /users endpoint",
+      "count": 234
+    },
+    {
+      "error_type": "Database connection pool exhausted",
+      "count": 187
+    },
+    {
+      "error_type": "Null pointer exception in payment flow",
+      "count": 156
+    },
+    {
+      "error_type": "Redis cache miss causing slowdown",
+      "count": 142
+    },
+    {
+      "error_type": "Authentication token expired prematurely",
+      "count": 98
+    }
+  ],
+  "error_by_type": {
+    "API Timeout on /users endpoint": 234,
+    "Database connection pool exhausted": 187,
+    "Null pointer exception in payment flow": 156,
+    "Redis cache miss causing slowdown": 142,
+    "Authentication token expired prematurely": 98,
+    "File upload size limit exceeded": 67,
+    "Email service rate limit hit": 54,
+    "Search indexing timeout": 43
+  },
+  "resolved_count": 2,
+  "unresolved_count": 6,
+  "new_errors": 4
+}

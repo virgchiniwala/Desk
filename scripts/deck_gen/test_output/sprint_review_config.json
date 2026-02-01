@@ -1,0 +1,15 @@
+{
+  "purpose": "sprint_review",
+  "template_name": "Sprint Review Template",
+  "template_file": "sprint_review_template.pptx",
+  "focus": "tactical",
+  "audience": "team",
+  "sections": [
+    "Sprint Summary",
+    "Metrics & KPIs",
+    "Completed Work",
+    "Blockers & Issues",
+    "Next Sprint Plan"
+  ],
+  "llm_instructions": "You are transforming raw data into a Sprint Review Template.\n\n## Audience & Purpose\n- **Audience:** team\n- **Focus:** tactical\n- **Tone:** detailed and operational\n\n## Required Sections\n- Sprint Summary\n- Metrics & KPIs\n- Completed Work\n- Blockers & Issues\n- Next Sprint Plan\n\n## Transformation Guidelines\n\n\n### Sprint Review Focus:\n1. **Metrics are central** - Show specific numbers, percentages, trends\n2. **Be detailed** - Teams need operational context\n3. **Highlight blockers** - Call out issues that need immediate attention\n4. **Action items** - Clear next steps for each area\n5. **Compare to last sprint** - Show progress/regression\n\n### Data Handling:\n- Include all error counts and types\n- Show resolution rates\n- List top 5-10 issues with details\n- Calculate sprint-over-sprint changes\n- Flag new vs recurring issues\n\n\n## Output Format\nGenerate slide content that matches the template structure. Each section should be:\n- Clear and scannable\n- Data-driven where possible\n- Appropriate to audience level\n- Formatted for slides (not paragraphs)\n"
+}

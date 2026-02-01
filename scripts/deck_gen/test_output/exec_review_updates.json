@@ -1,0 +1,31 @@
+{
+  "slides": [
+    {
+      "slide_index": 0,
+      "updates": [
+        {
+          "type": "title",
+          "old_text": "Sprint 11 Review",
+          "new_text": "Executive Review - Sprint 12"
+        }
+      ]
+    },
+    {
+      "slide_index": 1,
+      "updates": [
+        {
+          "type": "text_box",
+          "shape_id": 201,
+          "old_text": "Total errors: 1,115",
+          "new_text": "System stability improving: 981 errors (12% reduction)"
+        },
+        {
+          "type": "text_box",
+          "shape_id": 202,
+          "old_text": "Critical issues: 7",
+          "new_text": "Strategic risk: 0 critical issues require attention"
+        }
+      ]
+    }
+  ]
+}

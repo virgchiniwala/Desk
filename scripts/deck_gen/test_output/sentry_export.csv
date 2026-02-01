@@ -1,0 +1,9 @@
+Error Type,Count,Status,First Seen,Last Seen
+API Timeout on /users endpoint,234,unresolved,2026-01-18,2026-01-30
+Database connection pool exhausted,187,unresolved,2026-01-15,2026-01-30
+Null pointer exception in payment flow,156,resolved,2026-01-10,2026-01-25
+Redis cache miss causing slowdown,142,unresolved,2026-01-20,2026-01-30
+Authentication token expired prematurely,98,unresolved,2026-01-22,2026-01-30
+File upload size limit exceeded,67,resolved,2026-01-08,2026-01-28
+Email service rate limit hit,54,unresolved,2026-01-25,2026-01-30
+Search indexing timeout,43,unresolved,2026-01-19,2026-01-29

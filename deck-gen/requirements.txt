@@ -1,0 +1,4 @@
+anthropic~=0.39
+python-pptx~=1.0
+pandas~=2.2
+pytest~=8.3

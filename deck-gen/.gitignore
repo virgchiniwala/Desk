@@ -1,0 +1,10 @@
+# Deck generation work directories
+run_*/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Test output artifacts
+tests/output_*.pptx
