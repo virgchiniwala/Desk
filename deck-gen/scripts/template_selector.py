@@ -113,6 +113,10 @@ def main():
         "--type", required=True, choices=list(TEMPLATE_MAP.keys()), help="Template type"
     )
     parser.add_argument(
+        "--template-path",
+        help="Direct path to a template deck (.pptx). Overrides --type mapping if provided.",
+    )
+    parser.add_argument(
         "--templates-path",
         default="templates",
         help="Directory with templates (default: templates/)",
@@ -121,7 +125,7 @@ def main():
     args = parser.parse_args()
 
     try:
-        template_path = select_template(args.type, args.templates_path)
+        template_path = args.template_path if args.template_path else select_template(args.type, args.templates_path)
         analysis = analyze_template(template_path)
 
         output = json.dumps(analysis, indent=2)

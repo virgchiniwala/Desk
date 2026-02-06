@@ -1,4 +1,6 @@
 const db = require('../db/db');
+const fs = require('fs');
+const path = require('path');
 
 /**
  * TaskGraph - Manages task dependency graphs with lease-based execution
@@ -422,6 +424,48 @@ class TaskGraph {
   static _getAttemptCount(taskId) {
     const task = db.prepare('SELECT attempt_count FROM tasks WHERE id = ?').get(taskId);
     return task ? task.attempt_count : 0;
+  }
+
+  /**
+   * Register output artifacts for a completed task.
+   * @param {number} taskId
+   * @param {string} jobId
+   * @returns {Array<{filepath:string,file_size:number}>}
+   */
+  static registerTaskArtifacts(taskId, jobId) {
+    const outputDir = path.join(__dirname, '../../jobs', jobId, 'output');
+    if (!fs.existsSync(outputDir)) {
+      return [];
+    }
+
+    const discovered = [];
+    const walk = (dir, prefix = '') => {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const relativePath = path.join(prefix, entry.name);
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(fullPath, relativePath);
+          continue;
+        }
+
+        const stats = fs.statSync(fullPath);
+        discovered.push({ filepath: relativePath, file_size: stats.size });
+      }
+    };
+
+    walk(outputDir);
+
+    const insertStmt = db.prepare(`
+      INSERT OR IGNORE INTO task_artifacts (task_id, filepath, artifact_type, file_size)
+      VALUES (?, ?, 'output', ?)
+    `);
+
+    for (const file of discovered) {
+      insertStmt.run(taskId, file.filepath, file.file_size);
+    }
+
+    return discovered;
   }
 }
 

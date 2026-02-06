@@ -2,6 +2,8 @@ const { spawn } = require('child_process');
 const path = require('path');
 const EventEmitter = require('events');
 const db = require('../db/db');
+const ARTIFACT_KEY_TTL_MS = 60 * 60 * 1000; // 1 hour
+const ARTIFACT_KEY_MAX_SIZE = 10000;
 
 /**
  * WorkerManager - Manages Ralph worker process and broadcasts task updates via SSE
@@ -20,6 +22,7 @@ class WorkerManager extends EventEmitter {
     this.isRunning = false;
     this.shouldRestart = true;
     this.sseClients = new Map(); // conversationId -> Set of response objects
+    this.emittedArtifactKeys = new Map(); // artifactKey -> timestamp
   }
 
   /**
@@ -252,18 +255,49 @@ class WorkerManager extends EventEmitter {
       const files = listJobOutputFiles(jobId);
 
       if (files.length > 0) {
+        this._pruneArtifactKeyCache();
         files.forEach(file => {
+          const artifactKey = `${conversationId}:${jobId}:${file.relativePath}:${file.mtime}`;
+          if (this.emittedArtifactKeys.has(artifactKey)) {
+            return;
+          }
+          this.emittedArtifactKeys.set(artifactKey, Date.now());
+
           this.sendSSE(conversationId, 'artifact_ready', {
             jobId,
-            filename: file.name,
+            filename: file.relativePath,
             size: file.size,
-            path: `/artifacts/${jobId}/${file.name}`
+            path: `/artifacts/${jobId}/output/${file.relativePath.split('/').map(part => encodeURIComponent(part)).join('/')}`
           });
         });
       }
     } catch (error) {
       // Job output directory might not exist yet
       console.log(`[WorkerManager] No artifacts yet for job ${jobId}`);
+    }
+  }
+
+  _pruneArtifactKeyCache() {
+    const now = Date.now();
+
+    // TTL-based pruning first.
+    for (const [key, timestamp] of this.emittedArtifactKeys.entries()) {
+      if (now - timestamp > ARTIFACT_KEY_TTL_MS) {
+        this.emittedArtifactKeys.delete(key);
+      }
+    }
+
+    // Size cap fallback (drop oldest entries).
+    if (this.emittedArtifactKeys.size <= ARTIFACT_KEY_MAX_SIZE) {
+      return;
+    }
+
+    const entries = Array.from(this.emittedArtifactKeys.entries())
+      .sort((a, b) => a[1] - b[1]); // oldest first
+
+    const overflow = this.emittedArtifactKeys.size - ARTIFACT_KEY_MAX_SIZE;
+    for (let i = 0; i < overflow; i += 1) {
+      this.emittedArtifactKeys.delete(entries[i][0]);
     }
   }
 

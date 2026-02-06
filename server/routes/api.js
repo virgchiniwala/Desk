@@ -8,6 +8,10 @@ const db = require('../db/db');
 
 const router = express.Router();
 
+function encodeArtifactPath(relativePath) {
+  return relativePath.split('/').map(part => encodeURIComponent(part)).join('/');
+}
+
 // GET /api/conversations - List user's conversations
 router.get('/conversations', requireAuth, (req, res) => {
   try {
@@ -79,9 +83,9 @@ router.get('/jobs/:id/artifacts', requireAuth, (req, res) => {
     const files = listJobOutputFiles(id);
 
     const artifacts = files.map(file => ({
-      filename: file.name,
+      filename: file.relativePath,
       size: file.size,
-      path: `/artifacts/${id}/${file.name}`,
+      path: `/artifacts/${id}/output/${encodeArtifactPath(file.relativePath)}`,
       modified: file.mtime
     }));
 

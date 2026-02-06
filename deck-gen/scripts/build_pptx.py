@@ -87,6 +87,15 @@ def _apply_text_update(slide, update: dict) -> bool:
         if replace_text_preserve_format(shape.text_frame, old_text, new_text):
             return True
 
+        # Fallback for messy extracted text: replace entire first paragraph.
+        if shape.text_frame.paragraphs and shape.text_frame.paragraphs[0].runs:
+            shape.text_frame.paragraphs[0].runs[0].text = new_text
+            for run in shape.text_frame.paragraphs[0].runs[1:]:
+                run.text = ""
+            return True
+        shape.text = new_text
+        return True
+
     return False
 
 

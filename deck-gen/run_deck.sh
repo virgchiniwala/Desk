@@ -2,7 +2,7 @@
 # run_deck.sh — End-to-end deck generation pipeline
 #
 # Usage:
-#   ./run_deck.sh --type sprint_review --csv <sentry.csv> [--mock] [--output <output.pptx>]
+#   ./run_deck.sh --type sprint_review --csv <sentry.csv> --template <prior.pptx> [--mock] [--deterministic] [--output <output.pptx>]
 #
 # Stages:
 #   1. Select + analyze template
@@ -20,17 +20,21 @@ WORK_DIR="${SCRIPT_DIR}/run_$(date +%Y%m%d_%H%M%S)"
 TEMPLATE_TYPE="sprint_review"
 TEMPLATES_PATH="${SCRIPT_DIR}/templates"
 MOCK=false
+DETERMINISTIC=false
 OUTPUT=""
+TEMPLATE_PATH=""
 
 # Parse args
 while [[ $# -gt 0 ]]; do
     case $1 in
         --type)       TEMPLATE_TYPE="$2"; shift 2 ;;
         --csv)        CSV_PATH="$2";      shift 2 ;;
+        --template)   TEMPLATE_PATH="$2"; shift 2 ;;
         --mock)       MOCK=true;          shift   ;;
+        --deterministic) DETERMINISTIC=true; shift ;;
         --output|-o)  OUTPUT="$2";        shift 2 ;;
         -h|--help)
-            echo "Usage: $0 --type <sprint_review|exec_review> [--csv <path>] [--mock] [--output <path>]"
+            echo "Usage: $0 --type <sprint_review|exec_review> [--csv <path>] [--template <path>] [--mock] [--deterministic] [--output <path>]"
             exit 0
             ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
@@ -52,15 +56,22 @@ trap "echo 'Work dir: $WORK_DIR'" EXIT
 echo "=== Deck Generation Pipeline ===" >&2
 echo "  Type:     $TEMPLATE_TYPE" >&2
 echo "  Mock:     $MOCK" >&2
+echo "  Deterministic updates: $DETERMINISTIC" >&2
+echo "  Template: ${TEMPLATE_PATH:-<auto>}" >&2
 echo "  Output:   $OUTPUT" >&2
 echo "" >&2
 
 # Stage 1: Template selection + analysis
 echo "[1/5] Selecting template..." >&2
-python3 "${SCRIPT_DIR}/scripts/template_selector.py" \
-    --type "$TEMPLATE_TYPE" \
-    --templates-path "$TEMPLATES_PATH" \
-    -o "${WORK_DIR}/template_analysis.json"
+template_selector_args=(
+  --type "$TEMPLATE_TYPE"
+  --templates-path "$TEMPLATES_PATH"
+  -o "${WORK_DIR}/template_analysis.json"
+)
+if [[ -n "$TEMPLATE_PATH" ]]; then
+  template_selector_args+=(--template-path "$TEMPLATE_PATH")
+fi
+python3 "${SCRIPT_DIR}/scripts/template_selector.py" "${template_selector_args[@]}"
 
 # Stage 2: Parse metrics
 echo "[2/5] Parsing metrics..." >&2
@@ -72,7 +83,7 @@ fi
 
 # Stage 3: Generate slide updates
 echo "[3/5] Generating slide updates..." >&2
-if [[ "$MOCK" == true ]]; then
+if [[ "$MOCK" == true || "$DETERMINISTIC" == true ]]; then
     python3 "${SCRIPT_DIR}/scripts/generate_slide_updates_mock.py" \
         "${WORK_DIR}/template_analysis.json" \
         "${WORK_DIR}/metrics.json" \

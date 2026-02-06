@@ -81,7 +81,7 @@
         <ul class="file-list">
             ${outputFiles.map(file => `
             <li>
-                <a href="/artifacts/${jobId}/output/${file}" download>${file}</a>
+                <a href="/artifacts/${jobId}/output/${encodeURIComponent(file.relativePath).replace(/%2F/g, '/')}" download>${file.relativePath}</a>
             </li>
             `).join('')}
         </ul>

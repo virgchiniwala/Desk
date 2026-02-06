@@ -1,4 +1,6 @@
 const db = require('../db/db');
+const fs = require('fs');
+const path = require('path');
 const TaskGraph = require('./task-graph');
 const { runRalphScript } = require('./shell-runner');
 const { listJobOutputFiles } = require('./job-reader');
@@ -17,6 +19,14 @@ const { getProviderForConversation } = require('./ai/provider-manager');
 class AIAgent {
   constructor() {
     // Provider selection happens per-conversation in sendMessage()
+  }
+
+  _sanitizeFilename(name) {
+    return name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 200);
+  }
+
+  _encodeArtifactPath(relativePath) {
+    return relativePath.split('/').map(part => encodeURIComponent(part)).join('/');
   }
 
   /**
@@ -69,7 +79,7 @@ class AIAgent {
         maxTokens: 4096
       });
 
-      const fullResponse = response.content || '';
+      let fullResponse = response.content || '';
       const toolCalls = response.tool_calls || [];
 
       // Execute tool calls if any
@@ -302,9 +312,40 @@ class AIAgent {
       VALUES (?, ?)
     `).run(conversationId, jobId);
 
+    // Copy any uploaded attachments into job inputs for task commands.
+    const attachments = db.prepare(`
+      SELECT original_name, file_path
+      FROM attachments
+      WHERE conversation_id = ?
+      ORDER BY created_at ASC
+    `).all(conversationId);
+
+    const copiedInputs = [];
+    const inputsDir = path.join(__dirname, '../../jobs', jobId, 'inputs');
+
+    for (const attachment of attachments) {
+      if (!attachment.file_path || !fs.existsSync(attachment.file_path)) {
+        continue;
+      }
+
+      const baseName = this._sanitizeFilename(attachment.original_name || path.basename(attachment.file_path));
+      const ext = path.extname(baseName);
+      const stem = ext ? baseName.slice(0, -ext.length) : baseName;
+      let candidate = baseName;
+      let idx = 1;
+      while (fs.existsSync(path.join(inputsDir, candidate))) {
+        candidate = `${stem}_${idx}${ext}`;
+        idx += 1;
+      }
+
+      fs.copyFileSync(attachment.file_path, path.join(inputsDir, candidate));
+      copiedInputs.push(candidate);
+    }
+
     return {
       success: true,
       jobId,
+      copiedInputs,
       message: `Job ${jobId} created successfully`
     };
   }
@@ -370,8 +411,8 @@ class AIAgent {
       return {
         jobId,
         artifacts: files.map(file => ({
-          filename: file.name,
-          path: `/artifacts/${jobId}/${file.name}`,
+          filename: file.relativePath,
+          path: `/artifacts/${jobId}/output/${this._encodeArtifactPath(file.relativePath)}`,
           size: file.size
         }))
       };
@@ -388,6 +429,19 @@ class AIAgent {
    * Validate command for security
    */
   _validateCommand(command) {
+    // Allowlisted entrypoints only.
+    const allowedPrefixes = [
+      'python ',
+      'python3 ',
+      'bash ',
+      'node ',
+      './deck-gen/run_deck.sh ',
+      'deck-gen/run_deck.sh '
+    ];
+    if (!allowedPrefixes.some(prefix => command.startsWith(prefix))) {
+      throw new Error('Command must start with an allowlisted executable');
+    }
+
     const blockedPatterns = [
       /rm\s+-rf\s+\//,           // rm -rf /
       />\s*\/dev\/sd[a-z]/,      // write to disk devices
@@ -395,6 +449,10 @@ class AIAgent {
       /wget.*\|\s*sh/,           // pipe to shell
       /\$\(.*\)/,                // command substitution
       /`.*`/,                    // backticks
+      /\|/,                      // pipe operators
+      /\s;\s*/,                  // command separator
+      /\s&&\s/,                  // chained commands
+      /\s\|\|\s/,                // OR-chained commands
       /&&.*rm/,                  // chained destructive
       /;\s*rm/,                  // semicolon destructive
       /\/etc\//,                 // access /etc
@@ -410,9 +468,10 @@ class AIAgent {
       }
     }
 
-    // Ensure command writes to job directory
-    if (!command.includes('jobs/')) {
-      console.warn('Command does not reference jobs directory:', command);
+    // Enforce job-scoped paths if any jobs path appears in command.
+    const jobRefs = [...command.matchAll(/jobs\/([A-Z]+-[0-9]{3})\//g)].map(m => m[1]);
+    if (jobRefs.length > 0 && new Set(jobRefs).size > 1) {
+      throw new Error('Command cannot reference multiple jobs');
     }
   }
 
