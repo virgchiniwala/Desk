@@ -9,6 +9,7 @@ class ChatClient {
     this.jobs = jobs || [];
     this.eventSource = null;
     this.uploadedFiles = new Map();
+    this.deckPlan = null;
 
     this.init();
   }
@@ -17,6 +18,7 @@ class ChatClient {
     // Setup event listeners
     this.setupFormHandlers();
     this.setupFileUpload();
+    this.setupDeckWorkflow();
 
     // Connect to SSE stream
     this.connectSSE();
@@ -29,6 +31,7 @@ class ChatClient {
 
     // Auto-scroll messages
     this.scrollToBottom();
+    this.refreshDeckReadiness();
   }
 
   // ========================================
@@ -150,6 +153,7 @@ class ChatClient {
       // Clear uploaded files
       this.uploadedFiles.clear();
       this.renderUploadedFiles();
+      this.refreshDeckReadiness();
 
     } catch (error) {
       console.error('[Chat] Error sending message:', error);
@@ -295,6 +299,7 @@ class ChatClient {
       });
 
       this.renderUploadedFiles();
+      this.refreshDeckReadiness();
 
     } catch (error) {
       console.error('[Upload] Error:', error);
@@ -330,6 +335,209 @@ class ChatClient {
       chip.appendChild(removeBtn);
       container.appendChild(chip);
     });
+  }
+
+  // ========================================
+  // Deck Workflow
+  // ========================================
+
+  setupDeckWorkflow() {
+    const planBtn = document.getElementById('deckPlanBtn');
+    const runBtn = document.getElementById('deckRunBtn');
+
+    if (planBtn) {
+      planBtn.addEventListener('click', async () => {
+        await this.generateDeckPlan();
+      });
+    }
+
+    if (runBtn) {
+      runBtn.addEventListener('click', async () => {
+        await this.runDeckWorkflow();
+      });
+    }
+  }
+
+  setDeckStatus(text, statusClass = 'deck-status-idle') {
+    const el = document.getElementById('deckReadinessStatus');
+    if (!el) return;
+
+    el.className = `deck-status ${statusClass}`;
+    el.textContent = text;
+  }
+
+  renderDeckInputs(readiness) {
+    const filesEl = document.getElementById('deckInputFiles');
+    if (!filesEl) return;
+
+    filesEl.textContent = '';
+
+    const entries = [
+      { label: 'CSV', value: readiness.csv?.filename || 'Missing' },
+      { label: 'PPTX', value: readiness.pptx?.filename || 'Missing' }
+    ];
+
+    entries.forEach((entry) => {
+      const chip = document.createElement('div');
+      chip.className = 'deck-input-chip';
+
+      const label = document.createElement('span');
+      label.className = 'deck-input-label';
+      label.textContent = `${entry.label}:`;
+
+      const value = document.createElement('span');
+      value.className = 'deck-input-value';
+      value.textContent = entry.value;
+
+      chip.appendChild(label);
+      chip.appendChild(value);
+      filesEl.appendChild(chip);
+    });
+  }
+
+  renderDeckPlan(plan) {
+    const detailsEl = document.getElementById('deckPlanDetails');
+    if (!detailsEl) return;
+
+    detailsEl.textContent = '';
+
+    if (!plan) return;
+
+    const title = document.createElement('div');
+    title.className = 'deck-plan-title';
+    title.textContent = `Plan: ${plan.jobId}`;
+
+    const list = document.createElement('div');
+    list.className = 'deck-plan-list';
+
+    plan.tasks.forEach((task) => {
+      const item = document.createElement('div');
+      item.className = 'deck-plan-item';
+
+      const name = document.createElement('div');
+      name.className = 'deck-plan-name';
+      name.textContent = task.taskName;
+
+      const desc = document.createElement('div');
+      desc.className = 'deck-plan-desc';
+      desc.textContent = task.description;
+
+      const deps = document.createElement('div');
+      deps.className = 'deck-plan-deps';
+      deps.textContent = task.blockedBy.length > 0
+        ? `Depends on: ${task.blockedBy.join(', ')}`
+        : 'Depends on: none';
+
+      item.appendChild(name);
+      item.appendChild(desc);
+      item.appendChild(deps);
+      list.appendChild(item);
+    });
+
+    detailsEl.appendChild(title);
+    detailsEl.appendChild(list);
+  }
+
+  async refreshDeckReadiness() {
+    const planBtn = document.getElementById('deckPlanBtn');
+    const runBtn = document.getElementById('deckRunBtn');
+
+    try {
+      const response = await fetch(`/chat/${this.conversationId}/deck-readiness`);
+      if (!response.ok) {
+        throw new Error('Failed to load deck readiness');
+      }
+
+      const readiness = await response.json();
+      this.renderDeckInputs(readiness);
+
+      if (readiness.ready) {
+        this.setDeckStatus('Ready to generate plan.', 'deck-status-ready');
+        if (planBtn) planBtn.disabled = false;
+        if (runBtn) runBtn.disabled = !this.deckPlan;
+      } else {
+        this.deckPlan = null;
+        this.renderDeckPlan(null);
+        this.setDeckStatus('Upload one CSV and one PPTX to begin.', 'deck-status-idle');
+        if (planBtn) planBtn.disabled = true;
+        if (runBtn) runBtn.disabled = true;
+      }
+    } catch (error) {
+      console.error('[Deck] Readiness error:', error);
+      this.setDeckStatus('Failed to check readiness.', 'deck-status-error');
+      if (planBtn) planBtn.disabled = true;
+      if (runBtn) runBtn.disabled = true;
+    }
+  }
+
+  async generateDeckPlan() {
+    const planBtn = document.getElementById('deckPlanBtn');
+    const runBtn = document.getElementById('deckRunBtn');
+
+    if (planBtn) planBtn.disabled = true;
+    this.setDeckStatus('Generating plan...', 'deck-status-running');
+
+    try {
+      const response = await fetch(`/chat/${this.conversationId}/deck-plan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to generate plan');
+      }
+
+      this.deckPlan = data.plan;
+      this.renderDeckPlan(this.deckPlan);
+      this.setDeckStatus(`Plan ready for ${this.deckPlan.jobId}.`, 'deck-status-ready');
+      if (runBtn) runBtn.disabled = false;
+    } catch (error) {
+      console.error('[Deck] Plan error:', error);
+      this.setDeckStatus(`Plan failed: ${error.message}`, 'deck-status-error');
+      if (runBtn) runBtn.disabled = true;
+    } finally {
+      if (planBtn) planBtn.disabled = false;
+    }
+  }
+
+  async runDeckWorkflow() {
+    const planBtn = document.getElementById('deckPlanBtn');
+    const runBtn = document.getElementById('deckRunBtn');
+
+    if (!this.deckPlan) {
+      this.setDeckStatus('Generate a plan before running.', 'deck-status-error');
+      return;
+    }
+
+    if (runBtn) runBtn.disabled = true;
+    if (planBtn) planBtn.disabled = true;
+    this.setDeckStatus(`Starting ${this.deckPlan.jobId}...`, 'deck-status-running');
+
+    try {
+      const response = await fetch(`/chat/${this.conversationId}/deck-run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: this.deckPlan.jobId })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to start deck run');
+      }
+
+      this.deckPlan = null;
+      this.renderDeckPlan(null);
+      this.setDeckStatus(`Run started for ${data.jobId}.`, 'deck-status-ready');
+      this.addJobCard(data.jobId);
+      this.loadArtifacts(data.jobId);
+    } catch (error) {
+      console.error('[Deck] Run error:', error);
+      this.setDeckStatus(`Run failed: ${error.message}`, 'deck-status-error');
+    } finally {
+      if (planBtn) planBtn.disabled = false;
+      await this.refreshDeckReadiness();
+    }
   }
 
   // ========================================
@@ -549,6 +757,14 @@ class ChatClient {
   // ========================================
 
   addJobCard(jobId) {
+    if (document.querySelector(`.job-card[data-job-id="${jobId}"]`)) {
+      return;
+    }
+
+    if (!this.jobs.some(job => job.job_id === jobId)) {
+      this.jobs.push({ job_id: jobId });
+    }
+
     const taskPanel = document.getElementById('taskPanel');
 
     // Remove empty state

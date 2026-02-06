@@ -47,3 +47,12 @@
   - `node server/test-security.js` -> 10/10 pass
   - Live quoted-argument task execution (`QUOTE-001/quoted_args`) completed successfully under worker.
   - Artifact cache prune sanity check: expired entry removed, size bounded to 10000.
+- PACKAGE artifacts added:
+  - `jobs/JOB-DECK-001/output/runbook.md`
+  - `jobs/JOB-DECK-001/output/known-limitations.md`
+  - `jobs/JOB-DECK-001/output/ship-checklist.md`
+- Cleaned runtime-only leftovers from workspace:
+  - removed `jobs/DECK-101`
+  - removed `jobs/DECK-102`
+  - removed `jobs/QUOTE-001`
+  - removed `uploads/`

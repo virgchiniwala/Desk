@@ -177,6 +177,23 @@
       </div>
 
       <div class="task-panel-content" id="taskPanel">
+        <div class="deck-workflow-card">
+          <div class="deck-workflow-header">Deck Workflow</div>
+          <div id="deckReadinessStatus" class="deck-status deck-status-idle">
+            Upload one CSV and one PPTX to begin.
+          </div>
+          <div id="deckInputFiles" class="deck-input-files"></div>
+          <div class="deck-actions">
+            <button type="button" id="deckPlanBtn" class="btn-deck btn-deck-secondary" disabled>
+              Generate Plan
+            </button>
+            <button type="button" id="deckRunBtn" class="btn-deck btn-deck-primary" disabled>
+              Approve &amp; Run
+            </button>
+          </div>
+          <div id="deckPlanDetails" class="deck-plan-details"></div>
+        </div>
+
         <% if (jobs.length === 0) { %>
           <div class="empty-state">
             No tasks yet. Start a conversation and I'll create tasks for your goals.

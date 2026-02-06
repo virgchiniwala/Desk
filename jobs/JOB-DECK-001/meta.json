@@ -1,7 +1,7 @@
 {
   "jobId": "JOB-DECK-001",
   "title": "Desk v1 deck workflow planning",
-  "phase": "VERIFY",
+  "phase": "PACKAGE",
   "status": "NEEDS_REVIEW",
   "elevated": false,
   "allowedPaths": [
