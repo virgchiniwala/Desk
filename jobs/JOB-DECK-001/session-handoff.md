@@ -1,27 +1,26 @@
 # JOB-DECK-001 Session Handoff
 
 ## Current state
-- PLAN + IMPLEMENT + VERIFY are complete for the v1 deck slice.
-- REVIEW findings have been fixed and re-verified (parser, security test assertions, artifact-cache bounds).
+- PLAN, IMPLEMENT, VERIFY, and PACKAGE are complete for the v1 deck slice.
+- Packaging docs added and runtime-only integration leftovers removed.
 
 ## What worked (with evidence)
-- Conversation flow works with uploads, and inputs are copied into job workspace on `create_job`.
-- Task DAG executes under worker with dependency enforcement (`DECK-101`: build -> validate).
-- Worker now supports repo-relative commands after CWD fix (`DECK-102` completed in one attempt).
-- Artifacts are created, registered in `task_artifacts`, and downloadable through artifact routes.
-- Generated outputs validated as structurally valid PPTX.
-- Security test suite passes (`10/10`).
-- Evidence file: `jobs/JOB-DECK-001/output/verify-evidence.md`.
+- End-to-end upload -> DAG execution -> artifact generation validated.
+- Security suite passes (`10/10`).
+- Packaged outputs now present:
+  - `jobs/JOB-DECK-001/output/verify-evidence.md`
+  - `jobs/JOB-DECK-001/output/runbook.md`
+  - `jobs/JOB-DECK-001/output/known-limitations.md`
+  - `jobs/JOB-DECK-001/output/ship-checklist.md`
 
 ## What failed (and why)
-- Initial live task execution failed when worker CWD pointed to `jobs/<id>/output`; repo-relative script path was unresolved.
-- Fixed by running worker commands from repo root and ensuring output dir pre-creation.
+- No new failures in PACKAGE phase.
 
 ## What's next (ordered)
-1. PACKAGE pass: finalize operator runbook and known limitations.
-2. Prepare PR with phase-scoped commit message and verification evidence links.
-3. Optional: tighten create_task command contract to structured argv in DB (future hardening).
+1. Start UI-first follow-up job: `JOB-DECK-002`.
+2. Implement guided deck workflow UI (upload -> plan preview -> approve -> run -> download).
+3. Add integration test coverage for full UI/API path.
 
 ## Open risks / unknowns
-- `deck-gen/tests/test_multi_template.sh` still fails unless template files are committed under `deck-gen/templates/`.
-- Deterministic update mode is safe/reviewable but lower semantic quality than LLM-assisted content updates.
+- Deterministic mode quality is baseline; UX still needs guided flow for regular operator usage.
+- Multi-template CI test remains dependent on template fixture availability.
