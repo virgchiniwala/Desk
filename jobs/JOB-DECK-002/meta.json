@@ -1,0 +1,12 @@
+{
+  "jobId": "JOB-DECK-002",
+  "title": "UI-first deck workflow",
+  "phase": "VERIFY",
+  "status": "NEEDS_REVIEW",
+  "elevated": false,
+  "allowedPaths": [
+    "jobs/JOB-DECK-002/"
+  ],
+  "created": "2026-02-06",
+  "description": "Implement a guided chat UI flow for Sentry CSV + prior PPTX -> plan approval -> run -> artifact download"
+}

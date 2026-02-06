@@ -16,6 +16,49 @@ const {
 const router = express.Router();
 const aiAgent = new AIAgent();
 
+function sanitizeForJobInputs(name = '') {
+  return name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 200);
+}
+
+function isDeckCsv(name = '') {
+  return name.toLowerCase().endsWith('.csv');
+}
+
+function isDeckPptx(name = '') {
+  return name.toLowerCase().endsWith('.pptx');
+}
+
+function getDeckAttachments(conversationId) {
+  const attachments = db.prepare(`
+    SELECT id, original_name, created_at
+    FROM attachments
+    WHERE conversation_id = ?
+    ORDER BY created_at DESC
+  `).all(conversationId);
+
+  const csv = attachments.find(a => isDeckCsv(a.original_name));
+  const pptx = attachments.find(a => isDeckPptx(a.original_name));
+
+  return { csv, pptx };
+}
+
+function nextDeckJobId() {
+  const rows = db.prepare(`
+    SELECT job_id FROM conversation_jobs WHERE job_id LIKE 'DECK-%'
+    UNION
+    SELECT job_id FROM tasks WHERE job_id LIKE 'DECK-%'
+  `).all();
+
+  let maxNum = 100;
+  rows.forEach(row => {
+    const match = row.job_id.match(/^DECK-(\d{3})$/);
+    if (!match) return;
+    maxNum = Math.max(maxNum, parseInt(match[1], 10));
+  });
+
+  return `DECK-${String(maxNum + 1).padStart(3, '0')}`;
+}
+
 // Configure file upload
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -259,6 +302,171 @@ router.post('/:id/upload', requireAuth, upload.array('files', 10), (req, res) =>
   } catch (error) {
     console.error('Error uploading files:', error);
     res.status(500).json({ error: 'Failed to upload files' });
+  }
+});
+
+// GET /chat/:id/deck-readiness - Check if deck workflow has required files
+router.get('/:id/deck-readiness', requireAuth, (req, res) => {
+  const { id } = req.params;
+
+  const conversation = db.prepare(`
+    SELECT * FROM conversations
+    WHERE id = ? AND user_id = ?
+  `).get(id, req.session.user.id);
+
+  if (!conversation) {
+    return res.status(404).json({ error: 'Conversation not found' });
+  }
+
+  const { csv, pptx } = getDeckAttachments(id);
+
+  res.json({
+    ready: Boolean(csv && pptx),
+    csv: csv ? { id: csv.id, filename: csv.original_name } : null,
+    pptx: pptx ? { id: pptx.id, filename: pptx.original_name } : null
+  });
+});
+
+// POST /chat/:id/deck-plan - Build proposed deck DAG without execution
+router.post('/:id/deck-plan', requireAuth, (req, res) => {
+  const { id } = req.params;
+
+  const conversation = db.prepare(`
+    SELECT * FROM conversations
+    WHERE id = ? AND user_id = ?
+  `).get(id, req.session.user.id);
+
+  if (!conversation) {
+    return res.status(404).json({ error: 'Conversation not found' });
+  }
+
+  const { csv, pptx } = getDeckAttachments(id);
+  if (!csv || !pptx) {
+    return res.status(400).json({
+      error: 'Deck workflow requires one CSV and one PPTX attachment'
+    });
+  }
+
+  const jobId = nextDeckJobId();
+  const safeCsv = sanitizeForJobInputs(csv.original_name);
+  const safePptx = sanitizeForJobInputs(pptx.original_name);
+  const outputName = safePptx.replace(/\.pptx$/i, '') + '_updated.pptx';
+
+  const tasks = [
+    {
+      taskName: 'build_deck',
+      blockedBy: [],
+      description: 'Generate updated deck from uploaded CSV and prior deck',
+      commandPreview: `bash deck-gen/run_deck.sh --type sprint_review --csv jobs/${jobId}/inputs/${safeCsv} --template jobs/${jobId}/inputs/${safePptx} --deterministic --output jobs/${jobId}/output/${outputName}`
+    },
+    {
+      taskName: 'validate_deck',
+      blockedBy: ['build_deck'],
+      description: 'Validate generated PPTX',
+      commandPreview: `python3 deck-gen/scripts/validate_pptx.py jobs/${jobId}/output/${outputName}`
+    }
+  ];
+
+  res.json({
+    success: true,
+    plan: {
+      jobId,
+      title: 'Sentry Deck Refresh',
+      inputs: {
+        csv: csv.original_name,
+        pptx: pptx.original_name
+      },
+      tasks
+    }
+  });
+});
+
+// POST /chat/:id/deck-run - Create deck job + tasks and start worker execution
+router.post('/:id/deck-run', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  let { jobId } = req.body || {};
+
+  const conversation = db.prepare(`
+    SELECT * FROM conversations
+    WHERE id = ? AND user_id = ?
+  `).get(id, req.session.user.id);
+
+  if (!conversation) {
+    return res.status(404).json({ error: 'Conversation not found' });
+  }
+
+  const { csv, pptx } = getDeckAttachments(id);
+  if (!csv || !pptx) {
+    return res.status(400).json({
+      error: 'Deck workflow requires one CSV and one PPTX attachment'
+    });
+  }
+
+  if (!jobId || !/^[A-Z]+-[0-9]{3}$/.test(jobId)) {
+    jobId = nextDeckJobId();
+  }
+
+  try {
+    // Retry with a fresh ID if the plan ID was already used.
+    let created = null;
+    for (let i = 0; i < 3; i += 1) {
+      try {
+        created = await aiAgent._createJob(parseInt(id, 10), {
+          jobId,
+          title: 'Sentry Deck Refresh'
+        });
+        break;
+      } catch (err) {
+        if (!String(err.message || '').includes('already exists')) {
+          throw err;
+        }
+        jobId = nextDeckJobId();
+      }
+    }
+
+    if (!created) {
+      throw new Error('Failed to reserve a unique job ID');
+    }
+
+    const copiedInputs = created.copiedInputs || [];
+    const copiedCsv = copiedInputs.find(isDeckCsv);
+    const copiedPptx = copiedInputs.find(isDeckPptx);
+    if (!copiedCsv || !copiedPptx) {
+      throw new Error('Uploaded CSV/PPTX were not copied into job inputs');
+    }
+
+    const outputName = copiedPptx.replace(/\.pptx$/i, '') + '_updated.pptx';
+    const buildCommand = `bash deck-gen/run_deck.sh --type sprint_review --csv jobs/${jobId}/inputs/${copiedCsv} --template jobs/${jobId}/inputs/${copiedPptx} --deterministic --output jobs/${jobId}/output/${outputName}`;
+    const validateCommand = `python3 deck-gen/scripts/validate_pptx.py jobs/${jobId}/output/${outputName}`;
+
+    const buildTask = await aiAgent._createTask({
+      jobId,
+      taskName: 'build_deck',
+      description: 'Generate updated deck from uploaded CSV and prior deck',
+      command: buildCommand,
+      timeBudget: 20,
+      blockedBy: []
+    });
+
+    const validateTask = await aiAgent._createTask({
+      jobId,
+      taskName: 'validate_deck',
+      description: 'Validate generated PPTX',
+      command: validateCommand,
+      timeBudget: 10,
+      blockedBy: ['build_deck']
+    });
+
+    workerManager.sendSSE(parseInt(id, 10), 'job_created', { jobId });
+
+    res.json({
+      success: true,
+      jobId,
+      tasks: [buildTask, validateTask]
+    });
+  } catch (error) {
+    console.error('Error running deck workflow:', error);
+    res.status(500).json({ error: error.message || 'Failed to run deck workflow' });
   }
 });
 
