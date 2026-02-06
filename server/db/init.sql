@@ -14,8 +14,8 @@ CREATE TABLE IF NOT EXISTS users (
 -- Sessions table (managed by connect-sqlite3)
 CREATE TABLE IF NOT EXISTS sessions (
     sid TEXT PRIMARY KEY,
-    sess TEXT NOT NULL,
-    expired INTEGER NOT NULL
+    expired INTEGER NOT NULL,
+    sess TEXT NOT NULL
 );
 
 -- Create index on sessions.expired for efficient cleanup

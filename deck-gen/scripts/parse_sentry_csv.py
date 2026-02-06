@@ -26,13 +26,20 @@ def _compute_new_errors(df: pd.DataFrame, window_days: int = 14) -> Optional[int
 
     Returns None if 'First Seen' column is missing or unparseable.
     """
-    if "First Seen" not in df.columns:
+    first_seen_col = None
+    for col in df.columns:
+        lc = col.lower().strip()
+        if "first" in lc and "seen" in lc:
+            first_seen_col = col
+            break
+
+    if not first_seen_col:
         return None
 
     cutoff = datetime.now() - timedelta(days=window_days)
 
     try:
-        first_seen = pd.to_datetime(df["First Seen"], errors="coerce")
+        first_seen = pd.to_datetime(df[first_seen_col], errors="coerce")
         return int((first_seen >= cutoff).sum())
     except Exception:
         return None
@@ -54,35 +61,52 @@ def parse_csv(csv_path: str) -> dict:
     except Exception as e:
         raise ValueError(f"Failed to parse CSV: {e}") from e
 
-    # Validate required columns
-    required = {"Events", "Status"}
-    missing = required - set(df.columns)
-    if missing:
-        raise ValueError(f"Missing required columns: {missing}")
-
     if df.empty:
         raise ValueError("CSV contains no data rows")
 
-    # Normalize status for exact matching
-    df["_status"] = df["Status"].apply(_normalize_status)
+    # Detect common Sentry column variants.
+    normalized = {c.lower().strip(): c for c in df.columns}
 
-    total_errors = int(df["Events"].sum())
-    resolved_count = int(df.loc[df["_status"] == "resolved", "Events"].sum())
-    unresolved_count = int(df.loc[df["_status"] == "unresolved", "Events"].sum())
+    count_col = None
+    for key in ("events", "count", "occurrences", "event count"):
+        if key in normalized:
+            count_col = normalized[key]
+            break
+    if not count_col:
+        raise ValueError("Missing events/count column in CSV")
+
+    status_col = None
+    for key in ("status", "state"):
+        if key in normalized:
+            status_col = normalized[key]
+            break
+
+    # Normalize status for exact matching
+    if status_col:
+        df["_status"] = df[status_col].astype(str).apply(_normalize_status)
+    else:
+        df["_status"] = "unknown"
+
+    total_errors = int(df[count_col].fillna(0).sum())
+    resolved_count = int(df.loc[df["_status"] == "resolved", count_col].fillna(0).sum())
+    unresolved_count = int(df.loc[df["_status"] == "unresolved", count_col].fillna(0).sum())
+    if not status_col:
+        unresolved_count = total_errors
     error_types = len(df)
     new_errors = _compute_new_errors(df)
 
     # Top error types by event count
-    if "Title" in df.columns:
+    title_col = normalized.get("title") or normalized.get("issue") or normalized.get("error type")
+    if title_col:
         top_errors = (
-            df.nlargest(5, "Events")[["Title", "Events", "Status"]]
-            .rename(columns={"Events": "count"})
+            df.nlargest(5, count_col)[[title_col, count_col] + ([status_col] if status_col else [])]
+            .rename(columns={title_col: "title", count_col: "count"})
             .to_dict(orient="records")
         )
     else:
         top_errors = (
-            df.nlargest(5, "Events")[["Events", "Status"]]
-            .rename(columns={"Events": "count"})
+            df.nlargest(5, count_col)[[count_col] + ([status_col] if status_col else [])]
+            .rename(columns={count_col: "count"})
             .to_dict(orient="records")
         )
 

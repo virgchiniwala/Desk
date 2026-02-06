@@ -85,18 +85,20 @@ class Worker {
     try {
       // Validate command safety
       this.validateCommand(task.command);
+      console.log(`[TASK:${task.id}] STATUS:IN_PROGRESS`);
 
-      // Parse command into executable + args
-      const commandParts = task.command.split(' ');
+      // Parse command into executable + args with quote-awareness.
+      const commandParts = this.parseCommand(task.command);
       const executable = commandParts[0];
       const args = commandParts.slice(1);
 
-      // Determine working directory (job output directory)
-      const workingDir = path.join(process.cwd(), '../jobs', task.job_id, 'output');
+      // Execute from Desk repo root so repo-relative scripts resolve correctly.
+      const workingDir = process.cwd();
 
-      // Ensure working directory exists
-      if (!fs.existsSync(workingDir)) {
-        fs.mkdirSync(workingDir, { recursive: true });
+      // Ensure job output directory exists before command execution.
+      const outputDir = path.join(process.cwd(), 'jobs', task.job_id, 'output');
+      if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
       }
 
       // Spawn process
@@ -145,7 +147,9 @@ class Worker {
           this.log(`✓ Task ${task.id} completed successfully`);
 
           try {
+            TaskGraph.registerTaskArtifacts(task.id, task.job_id);
             TaskGraph.completeTask(task.id);
+            console.log(`[TASK:${task.id}] STATUS:COMPLETED`);
             this.log(`✓ Task ${task.id} marked COMPLETED`);
           } catch (error) {
             this.log(`Error marking task ${task.id} complete: ${error.message}`);
@@ -157,6 +161,7 @@ class Worker {
 
           try {
             TaskGraph.failTask(task.id, errorMessage);
+            console.log(`[TASK:${task.id}] STATUS:FAILED`);
             this.log(`✓ Task ${task.id} marked FAILED (retry logic applied)`);
           } catch (error) {
             this.log(`Error marking task ${task.id} failed: ${error.message}`);
@@ -173,6 +178,7 @@ class Worker {
 
         try {
           TaskGraph.failTask(task.id, error.message);
+          console.log(`[TASK:${task.id}] STATUS:FAILED`);
         } catch (err) {
           this.log(`Error marking task ${task.id} failed: ${err.message}`);
         }
@@ -183,6 +189,7 @@ class Worker {
 
       try {
         TaskGraph.failTask(task.id, error.message);
+        console.log(`[TASK:${task.id}] STATUS:FAILED`);
       } catch (err) {
         this.log(`Error marking task ${task.id} failed: ${err.message}`);
       }
@@ -190,6 +197,18 @@ class Worker {
   }
 
   validateCommand(command) {
+    const allowedPrefixes = [
+      'python ',
+      'python3 ',
+      'bash ',
+      'node ',
+      './deck-gen/run_deck.sh ',
+      'deck-gen/run_deck.sh '
+    ];
+    if (!allowedPrefixes.some(prefix => command.startsWith(prefix))) {
+      throw new Error('Command entrypoint is not allowlisted');
+    }
+
     // Block dangerous patterns
     const blockedPatterns = [
       /rm\s+-rf\s+\//,
@@ -197,7 +216,12 @@ class Worker {
       /\$\(.*\)/,
       /\.env/,
       /sudo/,
-      /eval/
+      /eval/,
+      /`/,
+      /\s;\s*/,
+      /\s&&\s/,
+      /\s\|\|\s/,
+      /\|/
     ];
 
     for (const pattern of blockedPatterns) {
@@ -205,6 +229,72 @@ class Worker {
         throw new Error(`Blocked dangerous command pattern: ${pattern}`);
       }
     }
+
+    const jobRefs = [...command.matchAll(/jobs\/([A-Z]+-[0-9]{3})\//g)].map(m => m[1]);
+    if (jobRefs.length > 0 && new Set(jobRefs).size > 1) {
+      throw new Error('Command cannot reference multiple jobs');
+    }
+  }
+
+  /**
+   * Parse a command string into argv tokens while honoring quotes/escapes.
+   * Supports single quotes, double quotes, and backslash escaping.
+   */
+  parseCommand(command) {
+    const tokens = [];
+    let current = '';
+    let inSingle = false;
+    let inDouble = false;
+    let escapeNext = false;
+
+    for (let i = 0; i < command.length; i += 1) {
+      const ch = command[i];
+
+      if (escapeNext) {
+        current += ch;
+        escapeNext = false;
+        continue;
+      }
+
+      if (ch === '\\') {
+        escapeNext = true;
+        continue;
+      }
+
+      if (ch === '\'' && !inDouble) {
+        inSingle = !inSingle;
+        continue;
+      }
+
+      if (ch === '"' && !inSingle) {
+        inDouble = !inDouble;
+        continue;
+      }
+
+      if (/\s/.test(ch) && !inSingle && !inDouble) {
+        if (current.length > 0) {
+          tokens.push(current);
+          current = '';
+        }
+        continue;
+      }
+
+      current += ch;
+    }
+
+    if (escapeNext || inSingle || inDouble) {
+      throw new Error('Malformed command: unterminated quote or escape');
+    }
+
+    if (current.length > 0) {
+      tokens.push(current);
+    }
+
+    if (tokens.length === 0) {
+      throw new Error('Malformed command: empty command');
+    }
+
+    return tokens;
   }
 
   sleep(ms) {

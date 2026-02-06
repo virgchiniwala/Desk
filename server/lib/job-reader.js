@@ -161,10 +161,10 @@ function listJobs() {
 }
 
 /**
- * List files in job's output directory
+ * List files in job's output directory with metadata
  *
  * @param {string} jobId - Job ID
- * @returns {Array<string>} Array of relative file paths
+ * @returns {Array<{name:string,relativePath:string,size:number,mtime:string}>}
  */
 function listJobOutputFiles(jobId) {
   const outputPath = getJobFilePath(jobId, 'output');
@@ -184,13 +184,20 @@ function listJobOutputFiles(jobId) {
       if (entry.isDirectory()) {
         walkDir(path.join(dir, entry.name), relativePath);
       } else {
-        files.push(relativePath);
+        const fullPath = path.join(dir, entry.name);
+        const stats = fs.statSync(fullPath);
+        files.push({
+          name: entry.name,
+          relativePath,
+          size: stats.size,
+          mtime: stats.mtime.toISOString()
+        });
       }
     }
   }
 
   walkDir(outputPath);
-  return files.sort();
+  return files.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
 }
 
 module.exports = {

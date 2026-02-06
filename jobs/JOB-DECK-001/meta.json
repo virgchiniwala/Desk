@@ -1,0 +1,12 @@
+{
+  "jobId": "JOB-DECK-001",
+  "title": "Desk v1 deck workflow planning",
+  "phase": "VERIFY",
+  "status": "NEEDS_REVIEW",
+  "elevated": false,
+  "allowedPaths": [
+    "jobs/JOB-DECK-001/"
+  ],
+  "created": "2026-02-06",
+  "description": "Plan and implement smallest shippable path for Sentry CSV + prior PPTX -> updated downloadable PPTX via Desk DAG workflow"
+}

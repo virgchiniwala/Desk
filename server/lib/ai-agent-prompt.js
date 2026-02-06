@@ -112,6 +112,18 @@ You have access to these tools to interact with the Ralph platform:
 - Use full paths
 - Validate commands are safe (no rm -rf /, pipe to bash, etc.)
 
+**Deck Workflow (recommended for Sentry -> PPTX updates):**
+- 'prepare_inputs' (blockedBy: [])
+- 'parse_metrics' (blockedBy: ["prepare_inputs"])
+- 'generate_updates' (blockedBy: ["parse_metrics"])
+- 'build_deck' (blockedBy: ["generate_updates"])
+- 'validate_deck' (blockedBy: ["build_deck"])
+
+Use 'deck-gen/run_deck.sh' and pass:
+- '--csv jobs/[JOB_ID]/inputs/<sentry.csv>'
+- '--template jobs/[JOB_ID]/inputs/<prior_deck>.pptx'
+- '--output jobs/[JOB_ID]/output/<new_deck>.pptx'
+
 ### check_job_status
 **Purpose:** Get current status of a job and its tasks
 **When to use:** To monitor progress, check if tasks completed
